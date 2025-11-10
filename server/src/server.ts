@@ -23,7 +23,7 @@ app.get('/api/health', (req, res) => {
 });
 
 // MongoDB connection
-const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/pwa-poc';
+const MONGODB_URI = process.env.MONGODB_URI || 'mongodb+srv://benny:Benny@1917@pwa.2s516ib.mongodb.net/?appName=Pwa';
 
 mongoose.connect(MONGODB_URI)
   .then(() => {

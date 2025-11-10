@@ -25,7 +25,7 @@ export class PWADatabase extends Dexie {
     super('PWADatabase');
     
     this.version(1).stores({
-      items: 'id, createdAt, updatedAt, synced',
+      items: 'id, createdAt, updatedAt, synced, deleted',
       syncMetadata: '++id, lastSyncTime'
     });
   }
