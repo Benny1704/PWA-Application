@@ -3,7 +3,7 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { db, addItem, deleteItem } from './db/dexie';
 import { useSyncManager } from './hooks/useSyncManager';
 import { 
-  Wifi, WifiOff, RefreshCw, Camera, Plus, Trash2, Download, 
+  RefreshCw, Camera, Plus, Trash2, Download, 
   CheckCircle, Inbox, Image, X, Sparkles 
 } from 'lucide-react';
 
@@ -47,7 +47,7 @@ function App() {
   const handleInstallClick = async () => {
     if (!deferredPrompt) return;
     deferredPrompt.prompt();
-    const { outcome } = await deferredPrompt.userChoice;
+    // const { outcome } = await deferredPrompt.userChoice;
     setDeferredPrompt(null);
     setShowInstallPrompt(false);
   };
