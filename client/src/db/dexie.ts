@@ -78,8 +78,10 @@ export const deleteItem = async (id: string) => {
 };
 
 export const getUnsyncedItems = async () => {
-  // Query for items where 'synced' is 0
-  return await db.items.where('synced').equals(0).toArray();
+  // --- THIS IS THE FIX ---
+  // Use filter() to check for the boolean 'false'.
+  // This is the correct way to query for non-indexable booleans.
+  return await db.items.filter(item => item.synced === false).toArray();
 };
 
 export const markItemsAsSynced = async (ids: string[]) => {

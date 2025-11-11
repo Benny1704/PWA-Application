@@ -51,6 +51,9 @@ router.post('/sync', async (req: Request, res: Response) => {
     );
     res.json({ success: true, data: results, synced: items.length });
   } catch (error) {
+    // --- THIS IS THE NEW LINE ---
+    console.error('❌ BATCH SYNC FAILED:', error); 
+    // --- END NEW LINE ---
     res.status(400).json({ success: false, error: 'Batch sync failed' });
   }
 });

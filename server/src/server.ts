@@ -1,3 +1,5 @@
+// server/src/server.ts
+
 import express from 'express';
 import mongoose from 'mongoose';
 import cors from 'cors';
@@ -9,18 +11,22 @@ dotenv.config();
 const app = express();
 
 // --- MongoDB Connection ---
-// In a serverless environment, you connect at the top level.
-// This connection can be reused across multiple function invocations.
-const MONGODB_URI = process.env.MONGODB_URI || 'mongodb+srv://benny:Benny@1917@pwa.2s516ib.mongodb.net/?appName=Pwa';
+const MONGODB_URI = process.env.MONGODB_URI;
 
-mongoose.connect(MONGODB_URI)
-  .then(() => {
-    console.log('✅ Connected to MongoDB');
-  })
-  .catch((error) => {
-    console.error('❌ MongoDB connection error:', error);
-    // It's crucial to log this, as a failed connection will cause your API to fail.
-  });
+if (!MONGODB_URI) {
+  console.error('❌ MONGODB_URI environment variable is not set.');
+}
+
+// Only attempt to connect if the URI is present
+if (MONGODB_URI) {
+  mongoose.connect(MONGODB_URI)
+    .then(() => {
+      console.log('✅ Connected to MongoDB');
+    })
+    .catch((error) => {
+      console.error('❌ MongoDB connection error:', error);
+    });
+}
 
 // --- Middleware ---
 // You might want to restrict this in production:
@@ -40,8 +46,16 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
+// --- Start Server for Local Development ---
+// This block will start the server locally
+// Vercel sets a 'VERCEL' env variable, so this block will be ignored on deployment
+if (!process.env.VERCEL) {
+  const PORT = process.env.PORT || 5000;
+  app.listen(PORT, () => {
+    console.log(`🚀 Server listening locally on http://localhost:${PORT}`);
+  });
+}
+
 // --- Export the Server ---
-// This is the *most important* change.
-// Instead of app.listen(), you export the express app instance.
-// Vercel automatically handles the server creation and port listening.
+// This is what Vercel uses to run your serverless function
 export default app;

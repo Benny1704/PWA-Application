@@ -2,10 +2,23 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db, addItem, deleteItem } from './db/dexie';
 import { useSyncManager } from './hooks/useSyncManager';
-import { 
-  RefreshCw, Camera, Plus, Trash2, Download, 
-  CheckCircle, Inbox, Image, X, Sparkles 
+import {
+  RefreshCw, Camera, Plus, Trash2, Download,
+  CheckCircle, Inbox, Image, X, Sparkles, XCircle,
+  WifiOff // Import new icon
 } from 'lucide-react';
+// Import PanInfo for the drag gesture
+import { motion, AnimatePresence, cubicBezier, Transition, PanInfo } from 'framer-motion';
+
+// --- ANIMATIONS (Unchanged) ---
+const springTransition: Transition = {
+  type: "spring",
+  stiffness: 400,
+  damping: 25,
+};
+const fastEase = cubicBezier(0.2, 0.8, 0.2, 1);
+const fastTransition: Transition = { duration: 0.3, ease: fastEase };
+
 
 interface Item {
   id?: string;
@@ -19,9 +32,8 @@ interface Item {
 
 function App() {
   const { isSyncing, syncStatus, performSync, isOnline } = useSyncManager();
-  
-  // Fixed query - filter deleted items in JavaScript after sorting
-  const items = useLiveQuery(() => 
+
+  const items = useLiveQuery(() =>
     db.items
       .orderBy('createdAt')
       .reverse()
@@ -32,6 +44,7 @@ function App() {
   const [showInstallPrompt, setShowInstallPrompt] = useState(false);
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [mounted, setMounted] = useState(false);
+  const [isModalOpen, setIsModalOpen] = useState(false);
 
   useEffect(() => {
     setMounted(true);
@@ -47,7 +60,6 @@ function App() {
   const handleInstallClick = async () => {
     if (!deferredPrompt) return;
     deferredPrompt.prompt();
-    // const { outcome } = await deferredPrompt.userChoice;
     setDeferredPrompt(null);
     setShowInstallPrompt(false);
   };
@@ -59,6 +71,7 @@ function App() {
         description: newItem.description,
         imageUrl: newItem.imageUrl,
       });
+      setIsModalOpen(false);
       if (isOnline) {
         setTimeout(() => performSync(), 100);
       }
@@ -69,20 +82,29 @@ function App() {
   };
 
   const handleDeleteItem = async (id: string) => {
-    if (window.confirm('Are you sure you want to delete this item?')) {
-      try {
-        await deleteItem(id);
-        if (isOnline) {
-          setTimeout(() => performSync(), 100);
-        }
-      } catch (error) {
-        console.error('Failed to delete item:', error);
+    try {
+      await deleteItem(id);
+      if (isOnline) {
+        setTimeout(() => performSync(), 100);
       }
+    } catch (error) {
+      console.error('Failed to delete item:', error);
     }
   };
 
+  // --- DRAG-TO-CLOSE HANDLER ---
+  const handleDragEnd = (event: any, info: PanInfo) => {
+    const dragThreshold = 200; // Dragged 200px down
+    const velocityThreshold = 500; // Flicked down fast
+
+    if (info.offset.y > dragThreshold || info.velocity.y > velocityThreshold) {
+      setIsModalOpen(false);
+    }
+  };
+
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-purple-50 to-pink-50">
+    <div className={`min-h-screen bg-slate-100 ${isModalOpen ? 'overflow-hidden' : ''}`}>
       <div className={`transition-all duration-1000 ${mounted ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-4'}`}>
         <Header
           isOnline={isOnline}
@@ -93,21 +115,71 @@ function App() {
           onInstall={handleInstallClick}
         />
         
-        <main className="max-w-4xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
-          <div className="space-y-8">
-            <div className={`transition-all duration-700 delay-100 ${mounted ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`}>
-              <AddItemForm onAddItem={handleAddItem} />
-            </div>
+        <main className="max-w-4xl mx-auto px-4 py-6 sm:px-6 lg:px-8">
+          <div className="space-y-5">
             <div className={`transition-all duration-700 delay-200 ${mounted ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`}>
               <ItemList items={items} onDelete={handleDeleteItem} />
             </div>
           </div>
         </main>
       </div>
+
+      {/* --- ADD ITEM MODAL --- */}
+      <AnimatePresence>
+        {isModalOpen && (
+          <>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1, transition: { duration: 0.2 } }}
+              exit={{ opacity: 0, transition: { duration: 0.2, delay: 0.1 } }}
+              onClick={() => setIsModalOpen(false)}
+              className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50"
+            />
+            
+            <motion.div
+              // --- GESTURE & ANIMATION FIX ---
+              drag="y" // 1. Enable vertical drag
+              dragConstraints={{ top: 0, bottom: 0 }} // 2. Don't let it drag "up"
+              dragElastic={{ bottom: 0.8 }} // 3. Allow it to be "pulled" down
+              onDragEnd={handleDragEnd} // 4. Handle the "flick-to-close"
+              initial={{ y: "100%" }}
+              animate={{ y: 0, transition: fastTransition }} // 5. Use FAST ease, not spring
+              exit={{ y: "100%", transition: { duration: 0.2, ease: "easeOut" } }}
+              className="fixed bottom-0 left-0 right-0 h-[90vh] bg-white rounded-t-3xl shadow-2xl z-50 cursor-grab active:cursor-grabbing"
+            >
+              <div className="max-w-4xl mx-auto p-5">
+                {/* This handle is now the visual cue for dragging */}
+                <div className="w-20 h-1.5 bg-slate-300 rounded-full mx-auto mb-4" />
+                <AddItemForm 
+                  onAddItem={handleAddItem} 
+                  onClose={() => setIsModalOpen(false)} 
+                />
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+
+      {/* --- FLOATING ACTION BUTTON (FAB) --- */}
+      <AnimatePresence>
+        {!isModalOpen && (
+          <motion.button
+            initial={{ scale: 0, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1, transition: { ...springTransition, delay: 0.3 } }}
+            exit={{ scale: 0, opacity: 0, transition: { duration: 0.2 } }}
+            whileTap={{ scale: 0.9 }}
+            onClick={() => setIsModalOpen(true)}
+            className="fixed z-40 bottom-6 right-6 w-16 h-16 bg-primary-600 text-white rounded-full flex items-center justify-center shadow-lg shadow-primary-500/50 hover:bg-primary-700 transition-colors"
+          >
+            <Plus className="w-8 h-8" />
+          </motion.button>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
 
+// --- HEADER REFACTORED FOR CLEANLINESS ---
 interface HeaderProps {
   isOnline: boolean;
   isSyncing: boolean;
@@ -119,39 +191,51 @@ interface HeaderProps {
 
 function Header({ isOnline, isSyncing, syncStatus, onSync, showInstallPrompt, onInstall }: HeaderProps) {
   return (
-    <header className="bg-white/80 backdrop-blur-xl shadow-lg border-b border-purple-100 sticky top-0 z-50">
+    <header className="bg-white shadow-sm border-b border-slate-200 sticky top-0 z-30">
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex justify-between items-center h-20">
+        <div className="flex justify-between items-center h-16">
           <div className="flex items-center gap-3">
-            <div className="w-12 h-12 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-2xl flex items-center justify-center shadow-lg shadow-purple-500/30 transform hover:rotate-12 transition-transform duration-300">
-              <Sparkles className="w-6 h-6 text-white" />
-            </div>
+            <motion.div
+              whileTap={{ scale: 0.9 }}
+              className="w-10 h-10 bg-primary-600 rounded-2xl flex items-center justify-center shadow-lg shadow-primary-500/30"
+            >
+              <Sparkles className="w-5 h-5 text-white" />
+            </motion.div>
             <div>
-              <h1 className="text-2xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
+              <h1 className="text-xl font-bold text-slate-900">
                 PWA Notes
               </h1>
-              <p className="text-xs text-gray-500">Capture your thoughts</p>
+              {/* REMOVED SUBTITLE to de-clutter */}
             </div>
           </div>
           
-          <div className="flex items-center gap-3">
-            <StatusIndicator isOnline={isOnline} />
+          <div className="flex items-center gap-2 sm:gap-3">
             {showInstallPrompt && (
-              <button
+              <motion.button
+                whileTap={{ scale: 0.95 }}
                 onClick={onInstall}
-                className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-green-500 to-emerald-500 text-white text-sm font-medium rounded-xl hover:shadow-lg hover:shadow-green-500/30 transform hover:scale-105 transition-all duration-300"
+                // AESTHETIC CHANGE: Icon-only on mobile, text on sm+
+                className="flex items-center justify-center w-10 h-10 sm:w-auto sm:px-4 sm:py-2 bg-success-500 text-white text-sm font-medium rounded-xl hover:bg-success-600 transition-all"
               >
-                <Download className="w-4 h-4" />
-                <span className="hidden sm:inline">Install</span>
-              </button>
+                <Download className="w-5 h-5 sm:w-4 sm:h-4" />
+                <span className="hidden sm:inline sm:ml-2">Install</span>
+              </motion.button>
             )}
-            <SyncButton isOnline={isOnline} isSyncing={isSyncing} onSync={onSync} />
+            
+            {/* NEW COMPONENT: This single button replaces *both*
+              the StatusIndicator and SyncButton.
+            */}
+            <SyncStatusButton
+              isOnline={isOnline}
+              isSyncing={isSyncing}
+              onSync={onSync}
+            />
           </div>
         </div>
       </div>
       {syncStatus !== 'idle' && (
-        <div className="bg-gradient-to-r from-indigo-500/10 to-purple-500/10 border-t border-purple-100">
-          <p className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-3 text-sm text-center text-indigo-700 font-medium">
+        <div className="bg-primary-50 border-t border-primary-100">
+          <p className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-2 text-xs text-center text-primary-700 font-medium">
             {syncStatus}
           </p>
         </div>
@@ -160,38 +244,63 @@ function Header({ isOnline, isSyncing, syncStatus, onSync, showInstallPrompt, on
   );
 }
 
-function StatusIndicator({ isOnline }: { isOnline: boolean }) {
+// --- NEW COMPONENT TO DE-CLUTTER HEADER ---
+// This button shows Online/Offline status AND acts as the Sync button.
+function SyncStatusButton({ isOnline, isSyncing, onSync }: { isOnline: boolean; isSyncing: boolean; onSync: () => void }) {
+  
+  const [buttonText, setButtonText] = useState('Online');
+  const [Icon, setIcon] = useState(() => RefreshCw);
+
+  useEffect(() => {
+    if (!isOnline) {
+      setButtonText('Offline');
+      setIcon(() => WifiOff);
+      return;
+    }
+
+    if (isSyncing) {
+      setButtonText('Syncing...');
+      setIcon(() => RefreshCw);
+      return;
+    }
+
+    setButtonText('Online');
+    setIcon(() => RefreshCw);
+
+  }, [isOnline, isSyncing]);
+
   return (
-    <div className="flex items-center gap-2 px-3 py-2 bg-white rounded-xl shadow-sm border border-gray-100">
-      <div className={`relative w-3 h-3 rounded-full ${isOnline ? 'bg-green-500' : 'bg-red-500'}`}>
-        {isOnline && (
-          <span className="absolute inset-0 rounded-full bg-green-500 animate-ping opacity-75"></span>
-        )}
-      </div>
-      <span className="text-sm font-semibold text-gray-700">
-        {isOnline ? 'Online' : 'Offline'}
-      </span>
-    </div>
+    <motion.button
+      whileTap={{ scale: 0.95 }}
+      onClick={onSync}
+      disabled={!isOnline || isSyncing}
+      // AESTHETIC CHANGE: Dynamic colors based on state
+      className={`flex items-center justify-center gap-2 w-10 h-10 sm:w-auto sm:px-4 sm:py-2 rounded-xl text-sm font-medium transition-all
+        ${!isOnline 
+          ? 'bg-slate-200 text-slate-500 cursor-not-allowed'
+          : isSyncing
+          ? 'bg-primary-500 text-white cursor-not-allowed'
+          : 'bg-primary-50 text-primary-600 hover:bg-primary-100'
+        }
+      `}
+    >
+      <Icon className={`w-5 h-5 sm:w-4 sm:h-4 ${isSyncing ? 'animate-spin' : ''}`} />
+      <span className="hidden sm:inline">{buttonText}</span>
+    </motion.button>
   );
 }
 
-function SyncButton({ isOnline, isSyncing, onSync }: { isOnline: boolean; isSyncing: boolean; onSync: () => void }) {
-  return (
-    <button
-      onClick={onSync}
-      disabled={!isOnline || isSyncing}
-      className="flex items-center justify-center w-11 h-11 bg-gradient-to-br from-indigo-500 to-purple-600 text-white rounded-xl hover:shadow-lg hover:shadow-purple-500/30 disabled:opacity-50 disabled:cursor-not-allowed transform hover:scale-105 transition-all duration-300 disabled:hover:scale-100"
-    >
-      <RefreshCw className={`w-5 h-5 ${isSyncing ? 'animate-spin' : ''}`} />
-    </button>
-  );
-}
+
+// (No changes to AddItemForm, CameraView, ItemList, or ItemCard)
+// ... (rest of the components from previous step) ...
+
 
 interface AddItemFormProps {
   onAddItem: (item: Omit<Item, 'createdAt' | 'synced' | 'id'>) => void;
+  onClose: () => void;
 }
 
-function AddItemForm({ onAddItem }: AddItemFormProps) {
+function AddItemForm({ onAddItem, onClose }: AddItemFormProps) {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
@@ -206,67 +315,80 @@ function AddItemForm({ onAddItem }: AddItemFormProps) {
   };
 
   return (
-    <div className="bg-white/80 backdrop-blur-xl shadow-xl rounded-3xl p-6 space-y-5 border border-purple-100 hover:shadow-2xl hover:shadow-purple-500/10 transition-all duration-500">
+    // Add "pointer-events-none" to the form container
+    // so drag gestures on empty space pass through to the modal
+    <div className="bg-white rounded-2xl p-5 space-y-4 pointer-events-none">
+      {/* Add "pointer-events-auto" to all interactive elements */}
       <input
         type="text"
         value={title}
         onChange={(e) => setTitle(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter' && !e.shiftKey) {
-            e.preventDefault();
-            handleSubmit();
-          }
-        }}
-        className="w-full px-5 py-3.5 bg-gradient-to-r from-indigo-50 to-purple-50 border-2 border-transparent rounded-2xl focus:border-indigo-500 focus:bg-white outline-none text-lg font-medium placeholder-gray-400 transition-all duration-300"
+        className="w-full px-4 py-3 bg-slate-100 border-2 border-slate-200 rounded-xl focus:border-primary-500 focus:bg-white outline-none text-base font-medium placeholder-slate-400 transition-all pointer-events-auto"
         placeholder="✨ What's on your mind?"
         required
       />
       <textarea
         value={description}
         onChange={(e) => setDescription(e.target.value)}
-        className="w-full px-5 py-3.5 bg-gradient-to-r from-indigo-50 to-purple-50 border-2 border-transparent rounded-2xl focus:border-purple-500 focus:bg-white outline-none placeholder-gray-400 transition-all duration-300 resize-none"
+        className="w-full px-4 py-3 bg-slate-100 border-2 border-slate-200 rounded-xl focus:border-primary-500 focus:bg-white outline-none text-base placeholder-slate-400 transition-all resize-none pointer-events-auto"
         placeholder="Add more details..."
         rows={3}
       />
 
       {showCamera ? (
-        <CameraView
-          onCapture={setCapturedImage}
-          onClose={() => setShowCamera(false)}
-        />
+        <div className="pointer-events-auto">
+          <CameraView
+            onCapture={setCapturedImage}
+            onClose={() => setShowCamera(false)}
+          />
+        </div>
       ) : (
-        <div className="flex justify-between items-center">
+        <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
           {capturedImage ? (
-            <div className="flex items-center gap-3 px-4 py-2 bg-gradient-to-r from-indigo-100 to-purple-100 rounded-xl">
-              <Image className="w-5 h-5 text-indigo-600" />
-              <span className="text-sm font-medium text-indigo-700">Image attached</span>
+            <div className="flex items-center gap-3 px-4 py-2 bg-primary-100 rounded-xl pointer-events-auto">
+              <Image className="w-5 h-5 text-primary-600" />
+              <span className="text-sm font-medium text-primary-700">Image attached</span>
               <button
                 type="button"
                 onClick={() => setCapturedImage(null)}
-                className="p-1 text-red-500 hover:bg-red-100 rounded-lg transition-colors"
+                className="p-1 text-danger-500 hover:bg-danger-100 rounded-lg transition-colors"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
           ) : (
-            <button
+            <motion.button
               type="button"
+              whileTap={{ scale: 0.95 }}
               onClick={() => setShowCamera(true)}
-              className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-gray-100 to-gray-200 text-gray-700 font-medium rounded-xl hover:shadow-md transform hover:scale-105 transition-all duration-300"
+              className="flex items-center gap-2 px-5 py-2 bg-slate-200 text-slate-700 font-medium rounded-xl hover:bg-slate-300 transition-colors pointer-events-auto"
             >
               <Camera className="w-4 h-4" />
-              <span>Take Photo</span>
-            </button>
+              <span className="text-sm">Take Photo</span>
+            </motion.button>
           )}
 
-          <button
-            type="button"
-            onClick={handleSubmit}
-            className="flex items-center justify-center gap-2 px-6 py-2.5 bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-semibold rounded-xl hover:shadow-lg hover:shadow-purple-500/30 transform hover:scale-105 transition-all duration-300"
-          >
-            <Plus className="w-5 h-5" />
-            <span>Add Note</span>
-          </button>
+          <div className="flex items-center gap-3 w-full sm:w-auto pointer-events-auto">
+            <motion.button
+              type="button"
+              whileTap={{ scale: 0.95 }}
+              onClick={onClose}
+              className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-6 py-2.5 bg-slate-200 text-slate-700 font-semibold rounded-xl hover:bg-slate-300 transition-colors text-sm"
+            >
+              <XCircle className="w-5 h-5" />
+              <span>Cancel</span>
+            </motion.button>
+
+            <motion.button
+              type="button"
+              whileTap={{ scale: 0.95 }}
+              onClick={handleSubmit}
+              className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-6 py-2.5 bg-primary-600 text-white font-semibold rounded-xl hover:bg-primary-700 shadow-lg shadow-primary-500/30 transition-all text-sm"
+            >
+              <Plus className="w-5 h-5" />
+              <span>Add Note</span>
+            </motion.button>
+          </div>
         </div>
       )}
     </div>
@@ -283,16 +405,12 @@ function CameraView({ onCapture, onClose }: CameraViewProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
-    // 1. Capture the ref value in a variable
     const currentVideoElement = videoRef.current;
-
     const startCamera = async () => {
       try {
         const stream = await navigator.mediaDevices.getUserMedia({ 
           video: { facingMode: 'environment' } 
         });
-        
-        // 2. Use the captured variable
         if (currentVideoElement) {
           currentVideoElement.srcObject = stream;
         }
@@ -303,18 +421,14 @@ function CameraView({ onCapture, onClose }: CameraViewProps) {
       }
     };
     startCamera();
-
-    // This is the cleanup function
     return () => {
-      // 3. Use the *same captured variable* in the cleanup
       if (currentVideoElement && currentVideoElement.srcObject) {
         (currentVideoElement.srcObject as MediaStream).getTracks().forEach(track => track.stop());
       }
     };
-  }, [onClose]); // The dependency array is correct
+  }, [onClose]);
 
   const capturePhoto = () => {
-    // ... (rest of your component is fine)
     if (videoRef.current && canvasRef.current) {
       const context = canvasRef.current.getContext('2d');
       if (context) {
@@ -336,25 +450,28 @@ function CameraView({ onCapture, onClose }: CameraViewProps) {
         className="w-full rounded-2xl bg-gray-900 shadow-2xl"
       />
       <div className="flex gap-3">
-        <button
+        <motion.button
           type="button"
+          whileTap={{ scale: 0.95 }}
           onClick={capturePhoto}
-          className="flex-1 px-5 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-semibold rounded-xl hover:shadow-lg hover:shadow-purple-500/30 transform hover:scale-105 transition-all duration-300"
+          className="flex-1 px-5 py-2.5 bg-primary-600 text-white font-semibold rounded-xl hover:bg-primary-700 shadow-lg shadow-primary-500/30 transition-all"
         >
           Capture
-        </button>
-        <button
+        </motion.button>
+        <motion.button
           type="button"
+          whileTap={{ scale: 0.95 }}
           onClick={onClose}
-          className="px-5 py-3 bg-gray-200 text-gray-700 font-semibold rounded-xl hover:bg-gray-300 transition-colors"
+          className="px-5 py-2.5 bg-slate-200 text-slate-700 font-semibold rounded-xl hover:bg-slate-300 transition-colors"
         >
           Cancel
-        </button>
+        </motion.button>
       </div>
       <canvas ref={canvasRef} style={{ display: 'none' }} />
     </div>
   );
 }
+
 
 interface ItemListProps {
   items: Item[] | undefined;
@@ -364,10 +481,10 @@ interface ItemListProps {
 function ItemList({ items, onDelete }: ItemListProps) {
   if (!items) {
     return (
-      <div className="text-center py-16 bg-white/80 backdrop-blur-xl rounded-3xl shadow-xl border border-purple-100">
+      <div className="text-center py-16 bg-white rounded-3xl shadow-md border border-slate-200">
         <div className="animate-pulse">
-          <div className="w-16 h-16 bg-gradient-to-br from-indigo-200 to-purple-200 rounded-full mx-auto mb-4"></div>
-          <p className="text-gray-500 font-medium">Loading your notes...</p>
+          <div className="w-16 h-16 bg-slate-200 rounded-full mx-auto mb-4"></div>
+          <p className="text-slate-500 font-medium">Loading your notes...</p>
         </div>
       </div>
     );
@@ -375,95 +492,137 @@ function ItemList({ items, onDelete }: ItemListProps) {
 
   if (items.length === 0) {
     return (
-      <div className="text-center py-20 bg-white/80 backdrop-blur-xl rounded-3xl shadow-xl border border-purple-100 transform transition-all duration-500 hover:scale-105">
-        <div className="w-20 h-20 bg-gradient-to-br from-indigo-100 to-purple-100 rounded-full flex items-center justify-center mx-auto mb-4 animate-bounce">
-          <Inbox className="w-10 h-10 text-indigo-400" />
-        </div>
-        <h3 className="text-2xl font-bold text-gray-800 mb-2">No notes yet</h3>
-        <p className="text-gray-500">Start capturing your thoughts above! ✨</p>
-      </div>
+      <motion.div 
+        initial={{ opacity: 0, scale: 0.9 }}
+        animate={{ opacity: 1, scale: 1, transition: { ...fastTransition, delay: 0.2 } }}
+        className="text-center py-20 bg-white rounded-3xl shadow-md border border-slate-200"
+      >
+        <motion.div
+          animate={{ y: [0, -10, 0] }}
+          transition={{ duration: 1.5, repeat: Infinity, ease: 'easeInOut' }}
+          className="w-20 h-20 bg-primary-100 rounded-full flex items-center justify-center mx-auto mb-4"
+        >
+          <Inbox className="w-10 h-10 text-primary-400" />
+        </motion.div>
+        <h3 className="text-xl font-bold text-slate-800 mb-2">No notes yet</h3>
+        <p className="text-sm text-slate-500">Start capturing your thoughts! ✨</p>
+      </motion.div>
     );
   }
 
   return (
-    <div className="space-y-5">
-      {items.map((item, index) => (
-        <ItemCard key={item.id} item={item} onDelete={onDelete} index={index} />
-      ))}
+    <div className="space-y-4">
+      <AnimatePresence>
+        {items.map((item, index) => (
+          <ItemCard key={item.id} item={item} onDelete={onDelete} index={index} />
+        ))}
+      </AnimatePresence>
     </div>
   );
 }
 
 function ItemCard({ item, onDelete, index }: { item: Item; onDelete: (id: string) => void; index: number }) {
-  const [isHovered, setIsHovered] = useState(false);
-  const [isVisible, setIsVisible] = useState(false);
-
-  useEffect(() => {
-    const timer = setTimeout(() => setIsVisible(true), index * 100);
-    return () => clearTimeout(timer);
-  }, [index]);
-
+  const [isDeleting, setIsDeleting] = useState(false);
+  
   return (
-    <article 
-      className={`bg-white/80 backdrop-blur-xl rounded-3xl shadow-lg overflow-hidden border border-purple-100 hover:shadow-2xl hover:shadow-purple-500/10 transition-all duration-500 transform hover:-translate-y-1 ${
-        isVisible ? 'opacity-100 translate-x-0' : 'opacity-0 -translate-x-8'
-      }`}
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
+    <motion.article
+      layout
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0, transition: { duration: 0.3, delay: index * 0.05, ease: fastEase } }}
+      exit={{ opacity: 0, x: -50, transition: { duration: 0.2, ease: fastEase } }}
+      className="bg-white rounded-2xl shadow-md overflow-hidden border border-slate-200"
     >
-      <div className="p-6">
-        <div className="flex items-start justify-between">
-          <div className="flex-1 pr-4">
-            <h3 className="text-xl font-bold text-gray-900 mb-2">
-              {item.title}
-            </h3>
-            <p className="text-gray-600 leading-relaxed">
-              {item.description}
-            </p>
-          </div>
-          <button
-            onClick={() => onDelete(item.id!)}
-            className={`p-2.5 text-gray-400 rounded-xl hover:bg-red-50 hover:text-red-500 transition-all duration-300 ${
-              isHovered ? 'opacity-100 scale-100' : 'opacity-0 scale-90'
-            }`}
+      <AnimatePresence mode="wait">
+        {isDeleting ? (
+          <motion.div
+            key="confirm"
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto', transition: fastTransition }}
+            exit={{ opacity: 0, height: 0, transition: { duration: 0.2 } }}
+            className="p-5 flex flex-col items-center justify-center text-center"
           >
-            <Trash2 className="w-5 h-5" />
-          </button>
-        </div>
-
-        <div className="flex items-center justify-between mt-4 pt-4 border-t border-gray-100">
-          <span className="text-xs text-gray-400 font-medium">
-            {new Date(item.createdAt).toLocaleDateString('en-US', { 
-              month: 'short', 
-              day: 'numeric', 
-              hour: '2-digit', 
-              minute: '2-digit' 
-            })}
-          </span>
-          {!item.synced ? (
-            <span className="flex items-center gap-1.5 text-xs font-semibold bg-gradient-to-r from-yellow-100 to-orange-100 text-yellow-700 px-3 py-1.5 rounded-full">
-              <div className="w-1.5 h-1.5 bg-yellow-500 rounded-full animate-pulse"></div>
-              Pending sync
-            </span>
-          ) : (
-            <div className="flex items-center gap-1.5 text-xs font-semibold text-green-600 bg-green-50 px-3 py-1.5 rounded-full">
-              <CheckCircle className="w-3.5 h-3.5" />
-              <span>Synced</span>
+            <h4 className="text-base font-semibold text-danger-600 mb-2">
+              Delete this note?
+            </h4>
+            <p className="text-sm text-slate-600 mb-4">This action cannot be undone.</p>
+            <div className="flex gap-3">
+              <motion.button
+                whileTap={{ scale: 0.95 }}
+                onClick={() => setIsDeleting(false)}
+                className="px-6 py-2 bg-slate-200 text-slate-700 font-semibold rounded-xl hover:bg-slate-300 transition-colors text-sm"
+              >
+                Cancel
+              </motion.button>
+              <motion.button
+                whileTap={{ scale: 0.95 }}
+                onClick={() => onDelete(item.id!)}
+                className="flex items-center gap-2 px-6 py-2 bg-danger-600 text-white font-semibold rounded-xl hover:bg-danger-700 shadow-lg shadow-danger-500/30 transition-all text-sm"
+              >
+                <Trash2 className="w-4 h-4" />
+                Delete
+              </motion.button>
             </div>
-          )}
-        </div>
-      </div>
+          </motion.div>
+        ) : (
+          <motion.div
+            key="content"
+            initial={false}
+            exit={{ opacity: 0, height: 0, transition: { duration: 0.2 } }}
+            className="relative"
+          >
+            <motion.button
+              whileTap={{ scale: 0.9 }}
+              onClick={() => setIsDeleting(true)}
+              className="absolute top-4 right-4 p-2 text-slate-400 rounded-xl hover:bg-danger-50 hover:text-danger-500 transition-all z-10"
+            >
+              <Trash2 className="w-5 h-5" />
+            </motion.button>
 
-      {item.imageUrl && (
-        <div className="border-t border-purple-100 overflow-hidden">
-          <img
-            src={item.imageUrl}
-            alt={item.title}
-            className="w-full h-auto object-cover transition-transform duration-700 hover:scale-105"
-          />
-        </div>
-      )}
-    </article>
+            <div className="p-5">
+              <div className="flex items-start justify-between">
+                <div className="flex-1 pr-10">
+                  <h3 className="text-lg font-bold text-slate-900 mb-1">
+                    {item.title}
+                  </h3>
+                  <p className="text-sm text-slate-600 leading-relaxed whitespace-pre-wrap">
+                    {item.description}
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between mt-4 pt-4 border-t border-slate-100">
+                <span className="text-xs text-slate-400 font-medium">
+                  {new Date(item.createdAt).toLocaleDateString('en-US', {
+                    month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' 
+                  })}
+                </span>
+                {!item.synced ? (
+                  <span className="flex items-center gap-1.5 text-xs font-semibold bg-warning-100 text-warning-700 px-3 py-1.5 rounded-full">
+                    <div className="w-1.5 h-1.5 bg-warning-500 rounded-full animate-pulse"></div>
+                    Pending sync
+                  </span>
+                ) : (
+                  <div className="flex items-center gap-1.5 text-xs font-semibold text-success-600 bg-success-50 px-3 py-1.5 rounded-full">
+                    <CheckCircle className="w-3.5 h-3.5" />
+                    <span>Synced</span>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {item.imageUrl && (
+              <div className="border-t border-slate-200 overflow-hidden">
+                <img
+                  src={item.imageUrl}
+                  alt={item.title}
+                  className="w-full h-auto object-cover"
+                />
+              </div>
+            )}
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </motion.article>
   );
 }
 

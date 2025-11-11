@@ -1,4 +1,8 @@
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
+// client/src/services/api.ts
+
+// Use the .env variable if it exists, otherwise fall back to a relative path
+// This works for BOTH local development and Vercel deployment.
+const API_BASE_URL = process.env.REACT_APP_API_URL || '/api';
 
 interface ApiResponse<T> {
   success: boolean;
