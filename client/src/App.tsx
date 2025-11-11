@@ -283,13 +283,18 @@ function CameraView({ onCapture, onClose }: CameraViewProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
+    // 1. Capture the ref value in a variable
+    const currentVideoElement = videoRef.current;
+
     const startCamera = async () => {
       try {
         const stream = await navigator.mediaDevices.getUserMedia({ 
           video: { facingMode: 'environment' } 
         });
-        if (videoRef.current) {
-          videoRef.current.srcObject = stream;
+        
+        // 2. Use the captured variable
+        if (currentVideoElement) {
+          currentVideoElement.srcObject = stream;
         }
       } catch (error) {
         console.error('Camera access denied:', error);
@@ -299,14 +304,17 @@ function CameraView({ onCapture, onClose }: CameraViewProps) {
     };
     startCamera();
 
+    // This is the cleanup function
     return () => {
-      if (videoRef.current && videoRef.current.srcObject) {
-        (videoRef.current.srcObject as MediaStream).getTracks().forEach(track => track.stop());
+      // 3. Use the *same captured variable* in the cleanup
+      if (currentVideoElement && currentVideoElement.srcObject) {
+        (currentVideoElement.srcObject as MediaStream).getTracks().forEach(track => track.stop());
       }
     };
-  }, [onClose]);
+  }, [onClose]); // The dependency array is correct
 
   const capturePhoto = () => {
+    // ... (rest of your component is fine)
     if (videoRef.current && canvasRef.current) {
       const context = canvasRef.current.getContext('2d');
       if (context) {
