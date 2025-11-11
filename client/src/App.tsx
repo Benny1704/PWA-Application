@@ -5,9 +5,8 @@ import { useSyncManager } from './hooks/useSyncManager';
 import {
   RefreshCw, Camera, Plus, Trash2, Download,
   CheckCircle, Inbox, Image, X, Sparkles, XCircle,
-  WifiOff // Import new icon
+  WifiOff
 } from 'lucide-react';
-// Import PanInfo for the drag gesture
 import { motion, AnimatePresence, cubicBezier, Transition, PanInfo } from 'framer-motion';
 
 // --- ANIMATIONS (Unchanged) ---
@@ -92,10 +91,9 @@ function App() {
     }
   };
 
-  // --- DRAG-TO-CLOSE HANDLER ---
   const handleDragEnd = (event: any, info: PanInfo) => {
-    const dragThreshold = 200; // Dragged 200px down
-    const velocityThreshold = 500; // Flicked down fast
+    const dragThreshold = 200;
+    const velocityThreshold = 500; 
 
     if (info.offset.y > dragThreshold || info.velocity.y > velocityThreshold) {
       setIsModalOpen(false);
@@ -136,25 +134,36 @@ function App() {
               className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50"
             />
             
+            {/* --- FIX: MODAL IS NOW A FLEX CONTAINER --- */}
             <motion.div
-              // --- GESTURE & ANIMATION FIX ---
-              drag="y" // 1. Enable vertical drag
-              dragConstraints={{ top: 0, bottom: 0 }} // 2. Don't let it drag "up"
-              dragElastic={{ bottom: 0.8 }} // 3. Allow it to be "pulled" down
-              onDragEnd={handleDragEnd} // 4. Handle the "flick-to-close"
               initial={{ y: "100%" }}
-              animate={{ y: 0, transition: fastTransition }} // 5. Use FAST ease, not spring
+              animate={{ y: 0, transition: fastTransition }}
               exit={{ y: "100%", transition: { duration: 0.2, ease: "easeOut" } }}
-              className="fixed bottom-0 left-0 right-0 h-[90vh] bg-white rounded-t-3xl shadow-2xl z-50 cursor-grab active:cursor-grabbing"
+              // 1. Remove drag props from the main container
+              // 2. Make it a flex-col to separate handle from content
+              className="fixed bottom-0 left-0 right-0 h-[90vh] bg-white rounded-t-3xl shadow-2xl z-50 flex flex-col"
             >
-              <div className="max-w-4xl mx-auto p-5">
-                {/* This handle is now the visual cue for dragging */}
-                <div className="w-20 h-1.5 bg-slate-300 rounded-full mx-auto mb-4" />
-                <AddItemForm 
-                  onAddItem={handleAddItem} 
-                  onClose={() => setIsModalOpen(false)} 
-                />
+              {/* --- FIX: 1. THE DRAG HANDLE --- */}
+              <motion.div
+                drag="y"
+                dragConstraints={{ top: 0, bottom: 0 }}
+                dragElastic={{ bottom: 0.8 }}
+                onDragEnd={handleDragEnd}
+                className="p-4 cursor-grab active:cursor-grabbing flex-shrink-0"
+              >
+                <div className="w-20 h-1.5 bg-slate-300 rounded-full mx-auto" />
+              </motion.div>
+
+              {/* --- FIX: 2. THE SCROLLABLE CONTENT --- */}
+              <div className="flex-1 overflow-y-auto px-5 pb-5">
+                <div className="max-w-4xl mx-auto">
+                  <AddItemForm 
+                    onAddItem={handleAddItem} 
+                    onClose={() => setIsModalOpen(false)} 
+                  />
+                </div>
               </div>
+
             </motion.div>
           </>
         )}
@@ -179,7 +188,7 @@ function App() {
   );
 }
 
-// --- HEADER REFACTORED FOR CLEANLINESS ---
+// --- HEADER (Unchanged from previous step) ---
 interface HeaderProps {
   isOnline: boolean;
   isSyncing: boolean;
@@ -205,7 +214,6 @@ function Header({ isOnline, isSyncing, syncStatus, onSync, showInstallPrompt, on
               <h1 className="text-xl font-bold text-slate-900">
                 PWA Notes
               </h1>
-              {/* REMOVED SUBTITLE to de-clutter */}
             </div>
           </div>
           
@@ -214,7 +222,6 @@ function Header({ isOnline, isSyncing, syncStatus, onSync, showInstallPrompt, on
               <motion.button
                 whileTap={{ scale: 0.95 }}
                 onClick={onInstall}
-                // AESTHETIC CHANGE: Icon-only on mobile, text on sm+
                 className="flex items-center justify-center w-10 h-10 sm:w-auto sm:px-4 sm:py-2 bg-success-500 text-white text-sm font-medium rounded-xl hover:bg-success-600 transition-all"
               >
                 <Download className="w-5 h-5 sm:w-4 sm:h-4" />
@@ -222,9 +229,6 @@ function Header({ isOnline, isSyncing, syncStatus, onSync, showInstallPrompt, on
               </motion.button>
             )}
             
-            {/* NEW COMPONENT: This single button replaces *both*
-              the StatusIndicator and SyncButton.
-            */}
             <SyncStatusButton
               isOnline={isOnline}
               isSyncing={isSyncing}
@@ -244,8 +248,7 @@ function Header({ isOnline, isSyncing, syncStatus, onSync, showInstallPrompt, on
   );
 }
 
-// --- NEW COMPONENT TO DE-CLUTTER HEADER ---
-// This button shows Online/Offline status AND acts as the Sync button.
+// --- SYNC STATUS BUTTON (Unchanged from previous step) ---
 function SyncStatusButton({ isOnline, isSyncing, onSync }: { isOnline: boolean; isSyncing: boolean; onSync: () => void }) {
   
   const [buttonText, setButtonText] = useState('Online');
@@ -274,7 +277,6 @@ function SyncStatusButton({ isOnline, isSyncing, onSync }: { isOnline: boolean; 
       whileTap={{ scale: 0.95 }}
       onClick={onSync}
       disabled={!isOnline || isSyncing}
-      // AESTHETIC CHANGE: Dynamic colors based on state
       className={`flex items-center justify-center gap-2 w-10 h-10 sm:w-auto sm:px-4 sm:py-2 rounded-xl text-sm font-medium transition-all
         ${!isOnline 
           ? 'bg-slate-200 text-slate-500 cursor-not-allowed'
@@ -291,10 +293,7 @@ function SyncStatusButton({ isOnline, isSyncing, onSync }: { isOnline: boolean; 
 }
 
 
-// (No changes to AddItemForm, CameraView, ItemList, or ItemCard)
-// ... (rest of the components from previous step) ...
-
-
+// --- ADD ITEM FORM ---
 interface AddItemFormProps {
   onAddItem: (item: Omit<Item, 'createdAt' | 'synced' | 'id'>) => void;
   onClose: () => void;
@@ -315,28 +314,26 @@ function AddItemForm({ onAddItem, onClose }: AddItemFormProps) {
   };
 
   return (
-    // Add "pointer-events-none" to the form container
-    // so drag gestures on empty space pass through to the modal
-    <div className="bg-white rounded-2xl p-5 space-y-4 pointer-events-none">
-      {/* Add "pointer-events-auto" to all interactive elements */}
+    // --- FIX: Remove card styling and pointer-events ---
+    <div className="space-y-4">
       <input
         type="text"
         value={title}
         onChange={(e) => setTitle(e.target.value)}
-        className="w-full px-4 py-3 bg-slate-100 border-2 border-slate-200 rounded-xl focus:border-primary-500 focus:bg-white outline-none text-base font-medium placeholder-slate-400 transition-all pointer-events-auto"
+        className="w-full px-4 py-3 bg-slate-100 border-2 border-slate-200 rounded-xl focus:border-primary-500 focus:bg-white outline-none text-base font-medium placeholder-slate-400 transition-all"
         placeholder="✨ What's on your mind?"
         required
       />
       <textarea
         value={description}
         onChange={(e) => setDescription(e.target.value)}
-        className="w-full px-4 py-3 bg-slate-100 border-2 border-slate-200 rounded-xl focus:border-primary-500 focus:bg-white outline-none text-base placeholder-slate-400 transition-all resize-none pointer-events-auto"
+        className="w-full px-4 py-3 bg-slate-100 border-2 border-slate-200 rounded-xl focus:border-primary-500 focus:bg-white outline-none text-base placeholder-slate-400 transition-all resize-none"
         placeholder="Add more details..."
         rows={3}
       />
 
       {showCamera ? (
-        <div className="pointer-events-auto">
+        <div>
           <CameraView
             onCapture={setCapturedImage}
             onClose={() => setShowCamera(false)}
@@ -345,7 +342,7 @@ function AddItemForm({ onAddItem, onClose }: AddItemFormProps) {
       ) : (
         <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
           {capturedImage ? (
-            <div className="flex items-center gap-3 px-4 py-2 bg-primary-100 rounded-xl pointer-events-auto">
+            <div className="flex items-center gap-3 px-4 py-2 bg-primary-100 rounded-xl">
               <Image className="w-5 h-5 text-primary-600" />
               <span className="text-sm font-medium text-primary-700">Image attached</span>
               <button
@@ -361,14 +358,14 @@ function AddItemForm({ onAddItem, onClose }: AddItemFormProps) {
               type="button"
               whileTap={{ scale: 0.95 }}
               onClick={() => setShowCamera(true)}
-              className="flex items-center gap-2 px-5 py-2 bg-slate-200 text-slate-700 font-medium rounded-xl hover:bg-slate-300 transition-colors pointer-events-auto"
+              className="flex items-center gap-2 px-5 py-2 bg-slate-200 text-slate-700 font-medium rounded-xl hover:bg-slate-300 transition-colors"
             >
               <Camera className="w-4 h-4" />
               <span className="text-sm">Take Photo</span>
             </motion.button>
           )}
 
-          <div className="flex items-center gap-3 w-full sm:w-auto pointer-events-auto">
+          <div className="flex items-center gap-3 w-full sm:w-auto">
             <motion.button
               type="button"
               whileTap={{ scale: 0.95 }}
@@ -395,6 +392,7 @@ function AddItemForm({ onAddItem, onClose }: AddItemFormProps) {
   );
 }
 
+// --- CAMERA VIEW (Unchanged) ---
 interface CameraViewProps {
   onCapture: (imageData: string) => void;
   onClose: () => void;
@@ -473,6 +471,7 @@ function CameraView({ onCapture, onClose }: CameraViewProps) {
 }
 
 
+// --- ITEM LIST (Unchanged) ---
 interface ItemListProps {
   items: Item[] | undefined;
   onDelete: (id: string) => void;
@@ -521,6 +520,7 @@ function ItemList({ items, onDelete }: ItemListProps) {
   );
 }
 
+// --- ITEM CARD (Unchanged) ---
 function ItemCard({ item, onDelete, index }: { item: Item; onDelete: (id: string) => void; index: number }) {
   const [isDeleting, setIsDeleting] = useState(false);
   
