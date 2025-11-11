@@ -1,3 +1,5 @@
+// client/src/db/dexie.ts
+
 import Dexie, { Table } from 'dexie';
 
 export interface Item {
@@ -24,16 +26,24 @@ export class PWADatabase extends Dexie {
   constructor() {
     super('PWADatabase');
     
+    // Original schema
     this.version(1).stores({
       items: 'id, createdAt, updatedAt, synced, deleted',
       syncMetadata: '++id, lastSyncTime'
+    });
+
+    // Version 2: Added compound index for sorting
+    this.version(2).stores({
+      items: 'id, createdAt, updatedAt, synced, deleted, [deleted+createdAt]', // <-- This is the upgrade
+      // syncMetadata schema is unchanged and carries over
     });
   }
 }
 
 export const db = new PWADatabase();
 
-// Helper functions
+// --- HELPER FUNCTIONS ---
+
 export const addItem = async (item: Omit<Item, 'id' | 'createdAt' | 'updatedAt' | 'synced'>) => {
   const id = `item_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
   const now = new Date();
@@ -43,7 +53,8 @@ export const addItem = async (item: Omit<Item, 'id' | 'createdAt' | 'updatedAt' 
     id,
     createdAt: now,
     updatedAt: now,
-    synced: false
+    synced: false,
+    deleted: false // <-- This is the critical fix
   };
   
   await db.items.add(newItem);
@@ -67,6 +78,7 @@ export const deleteItem = async (id: string) => {
 };
 
 export const getUnsyncedItems = async () => {
+  // Query for items where 'synced' is 0
   return await db.items.where('synced').equals(0).toArray();
 };
 

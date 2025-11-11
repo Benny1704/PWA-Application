@@ -1,9 +1,12 @@
+// client/public/sw.js
+
 const CACHE_NAME = 'pwa-poc-v1';
 const urlsToCache = [
   '/',
   '/index.html',
-  '/static/js/bundle.js',
-  '/static/css/main.css',
+  // You might need to update these paths if your build tool changes them
+  // '/static/js/bundle.js',
+  // '/static/css/main.css',
   '/manifest.json'
 ];
 
@@ -13,6 +16,7 @@ self.addEventListener('install', (event) => {
     caches.open(CACHE_NAME)
       .then((cache) => {
         console.log('Opened cache');
+        // We use addAll for the "app shell"
         return cache.addAll(urlsToCache);
       })
   );
@@ -38,6 +42,14 @@ self.addEventListener('activate', (event) => {
 
 // Fetch event - network first, fallback to cache
 self.addEventListener('fetch', (event) => {
+  // --- START FIX ---
+  // Only handle http/https requests, and only GET methods.
+  // This prevents errors from 'chrome-extension://' and other schemes.
+  if (event.request.method !== 'GET' || !event.request.url.startsWith('http')) {
+    return; // Let the browser handle it normally
+  }
+  // --- END FIX ---
+
   event.respondWith(
     fetch(event.request)
       .then((response) => {
@@ -47,6 +59,7 @@ self.addEventListener('fetch', (event) => {
         // Cache the fetched response
         caches.open(CACHE_NAME)
           .then((cache) => {
+            // We use 'put' to cache dynamic requests
             cache.put(event.request, responseToCache);
           });
         
@@ -59,7 +72,7 @@ self.addEventListener('fetch', (event) => {
             if (response) {
               return response;
             }
-            // Return offline page if available
+            // Fallback to the main page
             return caches.match('/index.html');
           });
       })
@@ -75,7 +88,6 @@ self.addEventListener('sync', (event) => {
 
 async function syncItems() {
   try {
-    // This will be triggered when connection is restored
     console.log('Background sync triggered');
     
     // Send message to all clients to trigger sync

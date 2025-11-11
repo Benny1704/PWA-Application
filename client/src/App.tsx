@@ -17,17 +17,27 @@ interface Item {
   imageUrl?: string;
   createdAt: Date;
   synced: boolean;
-  deleted?: number; // Added for dexie query
+  deleted?: boolean; // <-- This should be 'boolean'
 }
 
 // --- Main App Component ---
 function App() {
   const { isSyncing, syncStatus, performSync, isOnline } = useSyncManager();
 
-  // Fetch items that are not marked as deleted
+  // --- START FIX ---
+  // This is the corrected query.
+  // 1. .where('deleted').equals(0) - Finds items where deleted is 'false' (stored as 0)
+  // 2. .sortBy('createdAt') - Sorts them by creation time
+  // 3. .reverse() - Reverses the list to show newest items first
   const items = useLiveQuery(() => 
-    db.items.where('deleted').notEqual(1).reverse().sortBy('createdAt')
+    db.items
+      .where('deleted')
+      .equals(0)
+      .sortBy('createdAt')
+      .then(items => items.reverse()) // Do the reverse in JS
   ) as Item[] | undefined;
+  // --- END FIX ---
+
 
   const [showInstallPrompt, setShowInstallPrompt] = useState(false);
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
@@ -54,14 +64,7 @@ function App() {
 
   const handleAddItem = async (newItem: Omit<Item, 'createdAt' | 'synced' | 'id'>) => {
     try {
-      // --- START FIX ---
-      // The `newItem` object here carries the type from our local `Item`
-      // interface, which has `deleted?: number` (to match the Dexie query).
-      // The imported `addItem` function, however, expects `deleted?: boolean`.
-      //
-      // To fix this, we create a new, "clean" object with only the
-      // properties `addItem` *actually* needs for a new item. This
-      // breaks the type conflict.
+      // This "fix" from your original code is correct and should stay.
       const itemToAdd = {
         title: newItem.title,
         description: newItem.description,
@@ -69,7 +72,6 @@ function App() {
       };
 
       await addItem(itemToAdd);
-      // --- END FIX ---
 
       // Trigger sync if online
       if (isOnline) {
