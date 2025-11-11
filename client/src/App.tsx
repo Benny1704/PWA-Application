@@ -1,15 +1,12 @@
-// client/src/App.tsx
-
 import React, { useState, useEffect, useRef } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db, addItem, deleteItem } from './db/dexie';
 import { useSyncManager } from './hooks/useSyncManager';
 import { 
   Wifi, WifiOff, RefreshCw, Camera, Plus, Trash2, Download, 
-  CheckCircle, Inbox, Image as ImageIcon, X 
+  CheckCircle, Inbox, Image, X, Sparkles 
 } from 'lucide-react';
 
-// --- Item Interface ---
 interface Item {
   id?: string;
   title: string;
@@ -17,33 +14,27 @@ interface Item {
   imageUrl?: string;
   createdAt: Date;
   synced: boolean;
-  deleted?: boolean; // <-- This should be 'boolean'
+  deleted?: boolean;
 }
 
-// --- Main App Component ---
 function App() {
   const { isSyncing, syncStatus, performSync, isOnline } = useSyncManager();
-
-  // --- START FIX ---
-  // This is the corrected query.
-  // 1. .where('deleted').equals(0) - Finds items where deleted is 'false' (stored as 0)
-  // 2. .sortBy('createdAt') - Sorts them by creation time
-  // 3. .reverse() - Reverses the list to show newest items first
+  
+  // Fixed query - filter deleted items in JavaScript after sorting
   const items = useLiveQuery(() => 
     db.items
-      .where('deleted')
-      .equals(0)
-      .sortBy('createdAt')
-      .then(items => items.reverse()) // Do the reverse in JS
+      .orderBy('createdAt')
+      .reverse()
+      .toArray()
+      .then(allItems => allItems.filter(item => !item.deleted))
   ) as Item[] | undefined;
-  // --- END FIX ---
-
 
   const [showInstallPrompt, setShowInstallPrompt] = useState(false);
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+  const [mounted, setMounted] = useState(false);
 
-  // Install prompt handler
   useEffect(() => {
+    setMounted(true);
     const handler = (e: Event) => {
       e.preventDefault();
       setDeferredPrompt(e);
@@ -57,23 +48,17 @@ function App() {
     if (!deferredPrompt) return;
     deferredPrompt.prompt();
     const { outcome } = await deferredPrompt.userChoice;
-    console.log(`User response to install prompt: ${outcome}`);
     setDeferredPrompt(null);
     setShowInstallPrompt(false);
   };
 
   const handleAddItem = async (newItem: Omit<Item, 'createdAt' | 'synced' | 'id'>) => {
     try {
-      // This "fix" from your original code is correct and should stay.
-      const itemToAdd = {
+      await addItem({
         title: newItem.title,
         description: newItem.description,
         imageUrl: newItem.imageUrl,
-      };
-
-      await addItem(itemToAdd);
-
-      // Trigger sync if online
+      });
       if (isOnline) {
         setTimeout(() => performSync(), 100);
       }
@@ -97,27 +82,32 @@ function App() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-100">
-      <Header
-        isOnline={isOnline}
-        isSyncing={isSyncing}
-        syncStatus={syncStatus}
-        onSync={performSync}
-        showInstallPrompt={showInstallPrompt}
-        onInstall={handleInstallClick}
-      />
-      
-      <main className="max-w-3xl mx-auto px-4 py-6 sm:px-6 lg:px-8">
-        <div className="space-y-6">
-          <AddItemForm onAddItem={handleAddItem} />
-          <ItemList items={items} onDelete={handleDeleteItem} />
-        </div>
-      </main>
+    <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-purple-50 to-pink-50">
+      <div className={`transition-all duration-1000 ${mounted ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-4'}`}>
+        <Header
+          isOnline={isOnline}
+          isSyncing={isSyncing}
+          syncStatus={syncStatus}
+          onSync={performSync}
+          showInstallPrompt={showInstallPrompt}
+          onInstall={handleInstallClick}
+        />
+        
+        <main className="max-w-4xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
+          <div className="space-y-8">
+            <div className={`transition-all duration-700 delay-100 ${mounted ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`}>
+              <AddItemForm onAddItem={handleAddItem} />
+            </div>
+            <div className={`transition-all duration-700 delay-200 ${mounted ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`}>
+              <ItemList items={items} onDelete={handleDeleteItem} />
+            </div>
+          </div>
+        </main>
+      </div>
     </div>
   );
 }
 
-// --- Header Component ---
 interface HeaderProps {
   isOnline: boolean;
   isSyncing: boolean;
@@ -129,17 +119,27 @@ interface HeaderProps {
 
 function Header({ isOnline, isSyncing, syncStatus, onSync, showInstallPrompt, onInstall }: HeaderProps) {
   return (
-    <header className="bg-white shadow-sm sticky top-0 z-10">
-      <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex justify-between items-center h-16">
-          <h1 className="text-xl font-semibold text-gray-900">PWA Notes</h1>
-          <div className="flex items-center gap-4">
+    <header className="bg-white/80 backdrop-blur-xl shadow-lg border-b border-purple-100 sticky top-0 z-50">
+      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="flex justify-between items-center h-20">
+          <div className="flex items-center gap-3">
+            <div className="w-12 h-12 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-2xl flex items-center justify-center shadow-lg shadow-purple-500/30 transform hover:rotate-12 transition-transform duration-300">
+              <Sparkles className="w-6 h-6 text-white" />
+            </div>
+            <div>
+              <h1 className="text-2xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
+                PWA Notes
+              </h1>
+              <p className="text-xs text-gray-500">Capture your thoughts</p>
+            </div>
+          </div>
+          
+          <div className="flex items-center gap-3">
             <StatusIndicator isOnline={isOnline} />
             {showInstallPrompt && (
               <button
                 onClick={onInstall}
-                title="Install App"
-                className="flex items-center gap-2 px-3 py-2 bg-green-500 text-white text-sm font-medium rounded-md hover:bg-green-600 transition-colors"
+                className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-green-500 to-emerald-500 text-white text-sm font-medium rounded-xl hover:shadow-lg hover:shadow-green-500/30 transform hover:scale-105 transition-all duration-300"
               >
                 <Download className="w-4 h-4" />
                 <span className="hidden sm:inline">Install</span>
@@ -150,8 +150,8 @@ function Header({ isOnline, isSyncing, syncStatus, onSync, showInstallPrompt, on
         </div>
       </div>
       {syncStatus !== 'idle' && (
-        <div className="bg-gray-50 border-t border-gray-200">
-          <p className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-2 text-sm text-center text-gray-600">
+        <div className="bg-gradient-to-r from-indigo-500/10 to-purple-500/10 border-t border-purple-100">
+          <p className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-3 text-sm text-center text-indigo-700 font-medium">
             {syncStatus}
           </p>
         </div>
@@ -160,33 +160,33 @@ function Header({ isOnline, isSyncing, syncStatus, onSync, showInstallPrompt, on
   );
 }
 
-// --- Status Indicator Component ---
 function StatusIndicator({ isOnline }: { isOnline: boolean }) {
   return (
-    <div className="flex items-center gap-2">
-      <div className={`w-3 h-3 rounded-full ${isOnline ? 'bg-green-500' : 'bg-red-500'}`} />
-      <span className="text-sm font-medium text-gray-600">
+    <div className="flex items-center gap-2 px-3 py-2 bg-white rounded-xl shadow-sm border border-gray-100">
+      <div className={`relative w-3 h-3 rounded-full ${isOnline ? 'bg-green-500' : 'bg-red-500'}`}>
+        {isOnline && (
+          <span className="absolute inset-0 rounded-full bg-green-500 animate-ping opacity-75"></span>
+        )}
+      </div>
+      <span className="text-sm font-semibold text-gray-700">
         {isOnline ? 'Online' : 'Offline'}
       </span>
     </div>
   );
 }
 
-// --- Sync Button Component ---
 function SyncButton({ isOnline, isSyncing, onSync }: { isOnline: boolean; isSyncing: boolean; onSync: () => void }) {
   return (
     <button
       onClick={onSync}
       disabled={!isOnline || isSyncing}
-      title="Sync Items"
-      className="flex items-center justify-center w-10 h-10 text-gray-600 rounded-full hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+      className="flex items-center justify-center w-11 h-11 bg-gradient-to-br from-indigo-500 to-purple-600 text-white rounded-xl hover:shadow-lg hover:shadow-purple-500/30 disabled:opacity-50 disabled:cursor-not-allowed transform hover:scale-105 transition-all duration-300 disabled:hover:scale-100"
     >
       <RefreshCw className={`w-5 h-5 ${isSyncing ? 'animate-spin' : ''}`} />
     </button>
   );
 }
 
-// --- Add Item Form Component ---
 interface AddItemFormProps {
   onAddItem: (item: Omit<Item, 'createdAt' | 'synced' | 'id'>) => void;
 }
@@ -197,8 +197,7 @@ function AddItemForm({ onAddItem }: AddItemFormProps) {
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
   const [showCamera, setShowCamera] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = () => {
     if (!title.trim()) return;
     onAddItem({ title, description, imageUrl: capturedImage || undefined });
     setTitle('');
@@ -207,20 +206,26 @@ function AddItemForm({ onAddItem }: AddItemFormProps) {
   };
 
   return (
-    <form onSubmit={handleSubmit} className="bg-white shadow-md rounded-lg p-5 space-y-4">
+    <div className="bg-white/80 backdrop-blur-xl shadow-xl rounded-3xl p-6 space-y-5 border border-purple-100 hover:shadow-2xl hover:shadow-purple-500/10 transition-all duration-500">
       <input
         type="text"
         value={title}
         onChange={(e) => setTitle(e.target.value)}
-        className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none"
-        placeholder="Enter title"
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            handleSubmit();
+          }
+        }}
+        className="w-full px-5 py-3.5 bg-gradient-to-r from-indigo-50 to-purple-50 border-2 border-transparent rounded-2xl focus:border-indigo-500 focus:bg-white outline-none text-lg font-medium placeholder-gray-400 transition-all duration-300"
+        placeholder="✨ What's on your mind?"
         required
       />
       <textarea
         value={description}
         onChange={(e) => setDescription(e.target.value)}
-        className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none"
-        placeholder="Enter description..."
+        className="w-full px-5 py-3.5 bg-gradient-to-r from-indigo-50 to-purple-50 border-2 border-transparent rounded-2xl focus:border-purple-500 focus:bg-white outline-none placeholder-gray-400 transition-all duration-300 resize-none"
+        placeholder="Add more details..."
         rows={3}
       />
 
@@ -232,13 +237,13 @@ function AddItemForm({ onAddItem }: AddItemFormProps) {
       ) : (
         <div className="flex justify-between items-center">
           {capturedImage ? (
-            <div className="flex items-center gap-2">
-              <ImageIcon className="w-5 h-5 text-indigo-500" />
-              <span className="text-sm text-gray-700">Image attached</span>
+            <div className="flex items-center gap-3 px-4 py-2 bg-gradient-to-r from-indigo-100 to-purple-100 rounded-xl">
+              <Image className="w-5 h-5 text-indigo-600" />
+              <span className="text-sm font-medium text-indigo-700">Image attached</span>
               <button
                 type="button"
                 onClick={() => setCapturedImage(null)}
-                className="p-1 text-red-500 hover:text-red-700"
+                className="p-1 text-red-500 hover:bg-red-100 rounded-lg transition-colors"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -247,7 +252,7 @@ function AddItemForm({ onAddItem }: AddItemFormProps) {
             <button
               type="button"
               onClick={() => setShowCamera(true)}
-              className="flex items-center gap-2 px-3 py-2 bg-gray-100 text-gray-700 text-sm font-medium rounded-md hover:bg-gray-200 transition-colors"
+              className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-gray-100 to-gray-200 text-gray-700 font-medium rounded-xl hover:shadow-md transform hover:scale-105 transition-all duration-300"
             >
               <Camera className="w-4 h-4" />
               <span>Take Photo</span>
@@ -255,19 +260,19 @@ function AddItemForm({ onAddItem }: AddItemFormProps) {
           )}
 
           <button
-            type="submit"
-            className="flex items-center justify-center gap-2 px-4 py-2 bg-indigo-600 text-white font-medium rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+            type="button"
+            onClick={handleSubmit}
+            className="flex items-center justify-center gap-2 px-6 py-2.5 bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-semibold rounded-xl hover:shadow-lg hover:shadow-purple-500/30 transform hover:scale-105 transition-all duration-300"
           >
             <Plus className="w-5 h-5" />
-            <span>Add Item</span>
+            <span>Add Note</span>
           </button>
         </div>
       )}
-    </form>
+    </div>
   );
 }
 
-// --- Camera View Component ---
 interface CameraViewProps {
   onCapture: (imageData: string) => void;
   onClose: () => void;
@@ -315,25 +320,25 @@ function CameraView({ onCapture, onClose }: CameraViewProps) {
   };
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-4">
       <video
         ref={videoRef}
         autoPlay
         playsInline
-        className="w-full rounded-lg bg-gray-900"
+        className="w-full rounded-2xl bg-gray-900 shadow-2xl"
       />
       <div className="flex gap-3">
         <button
           type="button"
           onClick={capturePhoto}
-          className="flex-1 px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700"
+          className="flex-1 px-5 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-semibold rounded-xl hover:shadow-lg hover:shadow-purple-500/30 transform hover:scale-105 transition-all duration-300"
         >
           Capture
         </button>
         <button
           type="button"
           onClick={onClose}
-          className="px-4 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300"
+          className="px-5 py-3 bg-gray-200 text-gray-700 font-semibold rounded-xl hover:bg-gray-300 transition-colors"
         >
           Cancel
         </button>
@@ -343,7 +348,6 @@ function CameraView({ onCapture, onClose }: CameraViewProps) {
   );
 }
 
-// --- Item List Component ---
 interface ItemListProps {
   items: Item[] | undefined;
   onDelete: (id: string) => void;
@@ -352,64 +356,89 @@ interface ItemListProps {
 function ItemList({ items, onDelete }: ItemListProps) {
   if (!items) {
     return (
-      <div className="text-center py-12 bg-white rounded-lg shadow-md">
-        <p className="text-gray-500">Loading items...</p>
+      <div className="text-center py-16 bg-white/80 backdrop-blur-xl rounded-3xl shadow-xl border border-purple-100">
+        <div className="animate-pulse">
+          <div className="w-16 h-16 bg-gradient-to-br from-indigo-200 to-purple-200 rounded-full mx-auto mb-4"></div>
+          <p className="text-gray-500 font-medium">Loading your notes...</p>
+        </div>
       </div>
     );
   }
 
   if (items.length === 0) {
     return (
-      <div className="text-center py-16 bg-white rounded-lg shadow-md">
-        <Inbox className="w-12 h-12 text-gray-400 mx-auto" />
-        <h3 className="mt-2 text-lg font-medium text-gray-900">No items yet</h3>
-        <p className="mt-1 text-sm text-gray-500">Add your first item above!</p>
+      <div className="text-center py-20 bg-white/80 backdrop-blur-xl rounded-3xl shadow-xl border border-purple-100 transform transition-all duration-500 hover:scale-105">
+        <div className="w-20 h-20 bg-gradient-to-br from-indigo-100 to-purple-100 rounded-full flex items-center justify-center mx-auto mb-4 animate-bounce">
+          <Inbox className="w-10 h-10 text-indigo-400" />
+        </div>
+        <h3 className="text-2xl font-bold text-gray-800 mb-2">No notes yet</h3>
+        <p className="text-gray-500">Start capturing your thoughts above! ✨</p>
       </div>
     );
   }
 
   return (
-    <div className="space-y-4">
-      {items.map((item) => (
-        <ItemCard key={item.id} item={item} onDelete={onDelete} />
+    <div className="space-y-5">
+      {items.map((item, index) => (
+        <ItemCard key={item.id} item={item} onDelete={onDelete} index={index} />
       ))}
     </div>
   );
 }
 
-// --- Item Card Component ---
-function ItemCard({ item, onDelete }: { item: Item; onDelete: (id: string) => void }) {
+function ItemCard({ item, onDelete, index }: { item: Item; onDelete: (id: string) => void; index: number }) {
+  const [isHovered, setIsHovered] = useState(false);
+  const [isVisible, setIsVisible] = useState(false);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setIsVisible(true), index * 100);
+    return () => clearTimeout(timer);
+  }, [index]);
+
   return (
-    <article className="bg-white rounded-lg shadow-md overflow-hidden transition-shadow hover:shadow-lg">
-      <div className="p-5">
+    <article 
+      className={`bg-white/80 backdrop-blur-xl rounded-3xl shadow-lg overflow-hidden border border-purple-100 hover:shadow-2xl hover:shadow-purple-500/10 transition-all duration-500 transform hover:-translate-y-1 ${
+        isVisible ? 'opacity-100 translate-x-0' : 'opacity-0 -translate-x-8'
+      }`}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+    >
+      <div className="p-6">
         <div className="flex items-start justify-between">
-          <div className="flex-1">
-            <h3 className="text-lg font-semibold text-gray-900">
+          <div className="flex-1 pr-4">
+            <h3 className="text-xl font-bold text-gray-900 mb-2">
               {item.title}
             </h3>
-            <p className="text-sm text-gray-600 mt-1 mb-2">
+            <p className="text-gray-600 leading-relaxed">
               {item.description}
             </p>
           </div>
           <button
             onClick={() => onDelete(item.id!)}
-            title="Delete Item"
-            className="p-2 text-gray-400 rounded-full hover:bg-red-50 hover:text-red-500 transition-colors"
+            className={`p-2.5 text-gray-400 rounded-xl hover:bg-red-50 hover:text-red-500 transition-all duration-300 ${
+              isHovered ? 'opacity-100 scale-100' : 'opacity-0 scale-90'
+            }`}
           >
             <Trash2 className="w-5 h-5" />
           </button>
         </div>
 
-        <div className="flex items-center justify-between mt-3">
-          <span className="text-xs text-gray-400">
-            {new Date(item.createdAt).toLocaleString()}
+        <div className="flex items-center justify-between mt-4 pt-4 border-t border-gray-100">
+          <span className="text-xs text-gray-400 font-medium">
+            {new Date(item.createdAt).toLocaleDateString('en-US', { 
+              month: 'short', 
+              day: 'numeric', 
+              hour: '2-digit', 
+              minute: '2-digit' 
+            })}
           </span>
           {!item.synced ? (
-            <span className="text-xs font-medium bg-yellow-100 text-yellow-800 px-2 py-0.5 rounded-full">
+            <span className="flex items-center gap-1.5 text-xs font-semibold bg-gradient-to-r from-yellow-100 to-orange-100 text-yellow-700 px-3 py-1.5 rounded-full">
+              <div className="w-1.5 h-1.5 bg-yellow-500 rounded-full animate-pulse"></div>
               Pending sync
             </span>
           ) : (
-            <div className="flex items-center gap-1 text-xs text-green-600">
+            <div className="flex items-center gap-1.5 text-xs font-semibold text-green-600 bg-green-50 px-3 py-1.5 rounded-full">
               <CheckCircle className="w-3.5 h-3.5" />
               <span>Synced</span>
             </div>
@@ -418,11 +447,11 @@ function ItemCard({ item, onDelete }: { item: Item; onDelete: (id: string) => vo
       </div>
 
       {item.imageUrl && (
-        <div className="border-t border-gray-200">
+        <div className="border-t border-purple-100 overflow-hidden">
           <img
             src={item.imageUrl}
             alt={item.title}
-            className="w-full h-auto object-cover"
+            className="w-full h-auto object-cover transition-transform duration-700 hover:scale-105"
           />
         </div>
       )}
