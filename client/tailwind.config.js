@@ -7,33 +7,29 @@ module.exports = {
   ],
   theme: {
     extend: {
-      // 1. FORMALIZE THE COLOR PALETTE
       colors: {
-        // Use slate for backgrounds, borders, and muted text
         slate: colors.slate,
-        // Use indigo as the primary accent color
         primary: colors.indigo,
-        // Use green for success states
         success: colors.emerald,
-        // Use red for danger/delete states
         danger: colors.rose,
-        // Use for pending states
         warning: colors.amber,
       },
-      // 2. KEEP THE INTER FONT
       fontFamily: {
         sans: ['Inter', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'Helvetica', 'Arial', 'sans-serif'],
       },
-      // 3. DEFINE A SUBTLE "popIn" animation (optional but nice)
-      keyframes: {
-        popIn: {
-          '0%': { opacity: '0', transform: 'scale(0.95)' },
-          '100%': { opacity: '1', transform: 'scale(1)' },
-        }
-      },
       animation: {
-        popIn: 'popIn 0.25s cubic-bezier(0.2, 0.8, 0.2, 1) forwards',
-      }
+        'float': 'float 3s ease-in-out infinite',
+        'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+      },
+      keyframes: {
+        float: {
+          '0%, 100%': { transform: 'translateY(0px)' },
+          '50%': { transform: 'translateY(-10px)' },
+        },
+      },
+      backdropBlur: {
+        xs: '2px',
+      },
     },
   },
   plugins: [],

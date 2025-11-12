@@ -1,23 +1,27 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useLiveQuery } from 'dexie-react-hooks';
-import { db, addItem, deleteItem } from './db/dexie';
-import { useSyncManager } from './hooks/useSyncManager';
-import {
-  RefreshCw, Camera, Plus, Trash2, Download,
-  CheckCircle, Inbox, Image, X, Sparkles, XCircle,
-  WifiOff
-} from 'lucide-react';
-import { motion, AnimatePresence, cubicBezier, Transition, PanInfo } from 'framer-motion';
+import { Camera, Plus, Trash2, Download, CheckCircle, Inbox, Image, X, Sparkles, WifiOff, RefreshCw, Zap } from 'lucide-react';
+import { motion, AnimatePresence, PanInfo } from 'framer-motion';
 
-// --- ANIMATIONS (Unchanged) ---
-const springTransition: Transition = {
-  type: "spring",
-  stiffness: 400,
-  damping: 25,
+// Mock data and hooks for the artifact
+const useMockLiveQuery = () => {
+  const [items, setItems] = useState([
+    {
+      id: '1',
+      title: 'Welcome to PWA Notes',
+      description: 'This is your first note. Try adding more!',
+      createdAt: new Date(Date.now() - 86400000),
+      synced: true
+    }
+  ]);
+  return items;
 };
-const fastEase = cubicBezier(0.2, 0.8, 0.2, 1);
-const fastTransition: Transition = { duration: 0.3, ease: fastEase };
 
+const useMockSyncManager = () => ({
+  isSyncing: false,
+  syncStatus: 'idle',
+  performSync: () => console.log('Sync performed'),
+  isOnline: true
+});
 
 interface Item {
   id?: string;
@@ -30,157 +34,114 @@ interface Item {
 }
 
 function App() {
-  const { isSyncing, syncStatus, performSync, isOnline } = useSyncManager();
-
-  const items = useLiveQuery(() =>
-    db.items
-      .orderBy('createdAt')
-      .reverse()
-      .toArray()
-      .then(allItems => allItems.filter(item => !item.deleted))
-  ) as Item[] | undefined;
+  const { isSyncing, syncStatus, performSync, isOnline } = useMockSyncManager();
+  const items = useMockLiveQuery() as Item[];
 
   const [showInstallPrompt, setShowInstallPrompt] = useState(false);
-  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [mounted, setMounted] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
 
   useEffect(() => {
-    setMounted(true);
-    const handler = (e: Event) => {
-      e.preventDefault();
-      setDeferredPrompt(e);
-      setShowInstallPrompt(true);
-    };
-    window.addEventListener('beforeinstallprompt', handler);
-    return () => window.removeEventListener('beforeinstallprompt', handler);
+    setTimeout(() => setMounted(true), 50);
   }, []);
 
-  const handleInstallClick = async () => {
-    if (!deferredPrompt) return;
-    deferredPrompt.prompt();
-    setDeferredPrompt(null);
-    setShowInstallPrompt(false);
-  };
-
   const handleAddItem = async (newItem: Omit<Item, 'createdAt' | 'synced' | 'id'>) => {
-    try {
-      await addItem({
-        title: newItem.title,
-        description: newItem.description,
-        imageUrl: newItem.imageUrl,
-      });
-      setIsModalOpen(false);
-      if (isOnline) {
-        setTimeout(() => performSync(), 100);
-      }
-    } catch (error) {
-      console.error('Failed to add item:', error);
-      alert('Failed to add item');
-    }
+    console.log('Adding item:', newItem);
+    setIsModalOpen(false);
   };
 
   const handleDeleteItem = async (id: string) => {
-    try {
-      await deleteItem(id);
-      if (isOnline) {
-        setTimeout(() => performSync(), 100);
-      }
-    } catch (error) {
-      console.error('Failed to delete item:', error);
-    }
+    console.log('Deleting item:', id);
   };
 
   const handleDragEnd = (event: any, info: PanInfo) => {
-    const dragThreshold = 200;
-    const velocityThreshold = 500; 
-
-    if (info.offset.y > dragThreshold || info.velocity.y > velocityThreshold) {
+    if (info.offset.y > 200 || info.velocity.y > 500) {
       setIsModalOpen(false);
     }
   };
 
-
   return (
-    <div className={`min-h-screen bg-slate-100 ${isModalOpen ? 'overflow-hidden' : ''}`}>
-      <div className={`transition-all duration-1000 ${mounted ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-4'}`}>
+    <div className={`min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 ${isModalOpen ? 'overflow-hidden' : ''}`}>
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: mounted ? 1 : 0 }}
+        transition={{ duration: 0.6 }}
+      >
         <Header
           isOnline={isOnline}
           isSyncing={isSyncing}
           syncStatus={syncStatus}
           onSync={performSync}
           showInstallPrompt={showInstallPrompt}
-          onInstall={handleInstallClick}
+          onInstall={() => console.log('Install')}
         />
         
-        <main className="max-w-4xl mx-auto px-4 py-6 sm:px-6 lg:px-8">
-          <div className="space-y-5">
-            <div className={`transition-all duration-700 delay-200 ${mounted ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`}>
-              <ItemList items={items} onDelete={handleDeleteItem} />
-            </div>
-          </div>
+        <main className="max-w-5xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: mounted ? 1 : 0, y: mounted ? 0 : 20 }}
+            transition={{ delay: 0.2, duration: 0.5 }}
+          >
+            <ItemList items={items} onDelete={handleDeleteItem} />
+          </motion.div>
         </main>
-      </div>
+      </motion.div>
 
-      {/* --- ADD ITEM MODAL --- */}
+      {/* Modal */}
       <AnimatePresence>
         {isModalOpen && (
           <>
             <motion.div
               initial={{ opacity: 0 }}
-              animate={{ opacity: 1, transition: { duration: 0.2 } }}
-              exit={{ opacity: 0, transition: { duration: 0.2, delay: 0.1 } }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.2 }}
               onClick={() => setIsModalOpen(false)}
-              className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50"
+              className="fixed inset-0 bg-black/40 backdrop-blur-md z-50"
             />
             
-            {/* --- FIX: MODAL IS NOW A FLEX CONTAINER --- */}
             <motion.div
               initial={{ y: "100%" }}
-              animate={{ y: 0, transition: fastTransition }}
-              exit={{ y: "100%", transition: { duration: 0.2, ease: "easeOut" } }}
-              // 1. Remove drag props from the main container
-              // 2. Make it a flex-col to separate handle from content
-              className="fixed bottom-0 left-0 right-0 h-[90vh] bg-white rounded-t-3xl shadow-2xl z-50 flex flex-col"
+              animate={{ y: 0 }}
+              exit={{ y: "100%" }}
+              transition={{ type: "spring", damping: 30, stiffness: 300 }}
+              className="fixed bottom-0 left-0 right-0 max-h-[90vh] bg-white rounded-t-[2rem] shadow-2xl z-50 flex flex-col overflow-hidden"
             >
-              {/* --- FIX: 1. THE DRAG HANDLE --- */}
               <motion.div
                 drag="y"
                 dragConstraints={{ top: 0, bottom: 0 }}
                 dragElastic={{ bottom: 0.8 }}
                 onDragEnd={handleDragEnd}
-                className="p-4 cursor-grab active:cursor-grabbing flex-shrink-0"
+                className="p-4 cursor-grab active:cursor-grabbing flex-shrink-0 bg-gradient-to-b from-slate-50 to-white"
               >
-                <div className="w-20 h-1.5 bg-slate-300 rounded-full mx-auto" />
+                <div className="w-12 h-1.5 bg-slate-300 rounded-full mx-auto" />
               </motion.div>
 
-              {/* --- FIX: 2. THE SCROLLABLE CONTENT --- */}
-              <div className="flex-1 overflow-y-auto px-5 pb-5">
-                <div className="max-w-4xl mx-auto">
-                  <AddItemForm 
-                    onAddItem={handleAddItem} 
-                    onClose={() => setIsModalOpen(false)} 
-                  />
-                </div>
+              <div className="flex-1 overflow-y-auto px-6 pb-6">
+                <AddItemForm 
+                  onAddItem={handleAddItem} 
+                  onClose={() => setIsModalOpen(false)} 
+                />
               </div>
-
             </motion.div>
           </>
         )}
       </AnimatePresence>
 
-      {/* --- FLOATING ACTION BUTTON (FAB) --- */}
+      {/* FAB */}
       <AnimatePresence>
         {!isModalOpen && (
           <motion.button
-            initial={{ scale: 0, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1, transition: { ...springTransition, delay: 0.3 } }}
-            exit={{ scale: 0, opacity: 0, transition: { duration: 0.2 } }}
+            initial={{ scale: 0, rotate: -180 }}
+            animate={{ scale: 1, rotate: 0 }}
+            exit={{ scale: 0, rotate: 180 }}
+            transition={{ type: "spring", stiffness: 260, damping: 20, delay: 0.3 }}
+            whileHover={{ scale: 1.1, rotate: 90 }}
             whileTap={{ scale: 0.9 }}
             onClick={() => setIsModalOpen(true)}
-            className="fixed z-40 bottom-6 right-6 w-16 h-16 bg-primary-600 text-white rounded-full flex items-center justify-center shadow-lg shadow-primary-500/50 hover:bg-primary-700 transition-colors"
+            className="fixed z-40 bottom-8 right-8 w-16 h-16 bg-gradient-to-br from-indigo-600 to-purple-600 text-white rounded-2xl flex items-center justify-center shadow-2xl shadow-indigo-500/50 hover:shadow-indigo-600/60 transition-shadow"
           >
-            <Plus className="w-8 h-8" />
+            <Plus className="w-7 h-7" strokeWidth={2.5} />
           </motion.button>
         )}
       </AnimatePresence>
@@ -188,7 +149,6 @@ function App() {
   );
 }
 
-// --- HEADER (Unchanged from previous step) ---
 interface HeaderProps {
   isOnline: boolean;
   isSyncing: boolean;
@@ -200,32 +160,45 @@ interface HeaderProps {
 
 function Header({ isOnline, isSyncing, syncStatus, onSync, showInstallPrompt, onInstall }: HeaderProps) {
   return (
-    <header className="bg-white shadow-sm border-b border-slate-200 sticky top-0 z-30">
-      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+    <motion.header 
+      initial={{ y: -100 }}
+      animate={{ y: 0 }}
+      transition={{ type: "spring", stiffness: 100, damping: 20 }}
+      className="bg-white/80 backdrop-blur-xl shadow-sm border-b border-slate-200/50 sticky top-0 z-30"
+    >
+      <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center h-16">
-          <div className="flex items-center gap-3">
+          <motion.div 
+            className="flex items-center gap-3"
+            whileHover={{ scale: 1.02 }}
+          >
             <motion.div
-              whileTap={{ scale: 0.9 }}
-              className="w-10 h-10 bg-primary-600 rounded-2xl flex items-center justify-center shadow-lg shadow-primary-500/30"
+              whileHover={{ rotate: 360 }}
+              transition={{ duration: 0.6 }}
+              className="w-11 h-11 bg-gradient-to-br from-indigo-600 to-purple-600 rounded-2xl flex items-center justify-center shadow-lg shadow-indigo-500/30"
             >
-              <Sparkles className="w-5 h-5 text-white" />
+              <Sparkles className="w-6 h-6 text-white" strokeWidth={2.5} />
             </motion.div>
             <div>
-              <h1 className="text-xl font-bold text-slate-900">
+              <h1 className="text-xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
                 PWA Notes
               </h1>
+              <p className="text-xs text-slate-500">Sync everywhere</p>
             </div>
-          </div>
+          </motion.div>
           
           <div className="flex items-center gap-2 sm:gap-3">
             {showInstallPrompt && (
               <motion.button
+                initial={{ scale: 0, x: 20 }}
+                animate={{ scale: 1, x: 0 }}
+                whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
                 onClick={onInstall}
-                className="flex items-center justify-center w-10 h-10 sm:w-auto sm:px-4 sm:py-2 bg-success-500 text-white text-sm font-medium rounded-xl hover:bg-success-600 transition-all"
+                className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-green-500 to-emerald-600 text-white text-sm font-semibold rounded-xl hover:shadow-lg hover:shadow-green-500/30 transition-shadow"
               >
-                <Download className="w-5 h-5 sm:w-4 sm:h-4" />
-                <span className="hidden sm:inline sm:ml-2">Install</span>
+                <Download className="w-4 h-4" />
+                <span className="hidden sm:inline">Install</span>
               </motion.button>
             )}
             
@@ -237,63 +210,58 @@ function Header({ isOnline, isSyncing, syncStatus, onSync, showInstallPrompt, on
           </div>
         </div>
       </div>
-      {syncStatus !== 'idle' && (
-        <div className="bg-primary-50 border-t border-primary-100">
-          <p className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-2 text-xs text-center text-primary-700 font-medium">
-            {syncStatus}
-          </p>
-        </div>
-      )}
-    </header>
+      <AnimatePresence>
+        {syncStatus !== 'idle' && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            className="bg-gradient-to-r from-indigo-50 to-purple-50 border-t border-indigo-100 overflow-hidden"
+          >
+            <p className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-2 text-xs text-center text-indigo-700 font-medium">
+              <Zap className="w-3 h-3 inline mr-1" />
+              {syncStatus}
+            </p>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </motion.header>
   );
 }
 
-// --- SYNC STATUS BUTTON (Unchanged from previous step) ---
 function SyncStatusButton({ isOnline, isSyncing, onSync }: { isOnline: boolean; isSyncing: boolean; onSync: () => void }) {
-  
-  const [buttonText, setButtonText] = useState('Online');
-  const [Icon, setIcon] = useState(() => RefreshCw);
-
-  useEffect(() => {
-    if (!isOnline) {
-      setButtonText('Offline');
-      setIcon(() => WifiOff);
-      return;
-    }
-
-    if (isSyncing) {
-      setButtonText('Syncing...');
-      setIcon(() => RefreshCw);
-      return;
-    }
-
-    setButtonText('Online');
-    setIcon(() => RefreshCw);
-
-  }, [isOnline, isSyncing]);
-
   return (
     <motion.button
-      whileTap={{ scale: 0.95 }}
+      whileHover={{ scale: isOnline && !isSyncing ? 1.05 : 1 }}
+      whileTap={{ scale: isOnline && !isSyncing ? 0.95 : 1 }}
       onClick={onSync}
       disabled={!isOnline || isSyncing}
-      className={`flex items-center justify-center gap-2 w-10 h-10 sm:w-auto sm:px-4 sm:py-2 rounded-xl text-sm font-medium transition-all
+      className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all
         ${!isOnline 
-          ? 'bg-slate-200 text-slate-500 cursor-not-allowed'
+          ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
           : isSyncing
-          ? 'bg-primary-500 text-white cursor-not-allowed'
-          : 'bg-primary-50 text-primary-600 hover:bg-primary-100'
+          ? 'bg-indigo-100 text-indigo-600 cursor-not-allowed'
+          : 'bg-indigo-50 text-indigo-600 hover:bg-indigo-100 hover:shadow-md'
         }
       `}
     >
-      <Icon className={`w-5 h-5 sm:w-4 sm:h-4 ${isSyncing ? 'animate-spin' : ''}`} />
-      <span className="hidden sm:inline">{buttonText}</span>
+      {!isOnline ? (
+        <WifiOff className="w-4 h-4" />
+      ) : (
+        <motion.div
+          animate={{ rotate: isSyncing ? 360 : 0 }}
+          transition={{ duration: 1, repeat: isSyncing ? Infinity : 0, ease: "linear" }}
+        >
+          <RefreshCw className="w-4 h-4" />
+        </motion.div>
+      )}
+      <span className="hidden sm:inline">
+        {!isOnline ? 'Offline' : isSyncing ? 'Syncing...' : 'Online'}
+      </span>
     </motion.button>
   );
 }
 
-
-// --- ADD ITEM FORM ---
 interface AddItemFormProps {
   onAddItem: (item: Omit<Item, 'createdAt' | 'synced' | 'id'>) => void;
   onClose: () => void;
@@ -314,85 +282,100 @@ function AddItemForm({ onAddItem, onClose }: AddItemFormProps) {
   };
 
   return (
-    // --- FIX: Remove card styling and pointer-events ---
-    <div className="space-y-4">
+    <motion.div 
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: 0.1 }}
+      className="space-y-5 py-4"
+    >
+      <h2 className="text-2xl font-bold text-slate-900 mb-6">Create New Note</h2>
+      
       <input
         type="text"
         value={title}
         onChange={(e) => setTitle(e.target.value)}
-        className="w-full px-4 py-3 bg-slate-100 border-2 border-slate-200 rounded-xl focus:border-primary-500 focus:bg-white outline-none text-base font-medium placeholder-slate-400 transition-all"
+        className="w-full px-5 py-4 bg-slate-50 border-2 border-slate-200 rounded-2xl focus:border-indigo-500 focus:bg-white focus:ring-4 focus:ring-indigo-100 outline-none text-base font-semibold placeholder-slate-400 transition-all"
         placeholder="✨ What's on your mind?"
-        required
+        autoFocus
       />
+      
       <textarea
         value={description}
         onChange={(e) => setDescription(e.target.value)}
-        className="w-full px-4 py-3 bg-slate-100 border-2 border-slate-200 rounded-xl focus:border-primary-500 focus:bg-white outline-none text-base placeholder-slate-400 transition-all resize-none"
+        className="w-full px-5 py-4 bg-slate-50 border-2 border-slate-200 rounded-2xl focus:border-indigo-500 focus:bg-white focus:ring-4 focus:ring-indigo-100 outline-none text-base placeholder-slate-400 transition-all resize-none"
         placeholder="Add more details..."
-        rows={3}
+        rows={4}
       />
 
       {showCamera ? (
-        <div>
-          <CameraView
-            onCapture={setCapturedImage}
-            onClose={() => setShowCamera(false)}
-          />
-        </div>
+        <CameraView
+          onCapture={setCapturedImage}
+          onClose={() => setShowCamera(false)}
+        />
       ) : (
-        <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
-          {capturedImage ? (
-            <div className="flex items-center gap-3 px-4 py-2 bg-primary-100 rounded-xl">
-              <Image className="w-5 h-5 text-primary-600" />
-              <span className="text-sm font-medium text-primary-700">Image attached</span>
-              <button
-                type="button"
+        <div className="flex flex-col gap-4">
+          {capturedImage && (
+            <motion.div 
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              className="flex items-center gap-3 px-4 py-3 bg-gradient-to-r from-indigo-50 to-purple-50 rounded-xl border border-indigo-200"
+            >
+              <Image className="w-5 h-5 text-indigo-600" />
+              <span className="text-sm font-semibold text-indigo-700 flex-1">Image attached</span>
+              <motion.button
+                whileHover={{ scale: 1.1, rotate: 90 }}
+                whileTap={{ scale: 0.9 }}
                 onClick={() => setCapturedImage(null)}
-                className="p-1 text-danger-500 hover:bg-danger-100 rounded-lg transition-colors"
+                className="p-1.5 text-indigo-600 hover:bg-indigo-200 rounded-lg transition-colors"
               >
                 <X className="w-4 h-4" />
-              </button>
-            </div>
-          ) : (
-            <motion.button
-              type="button"
-              whileTap={{ scale: 0.95 }}
-              onClick={() => setShowCamera(true)}
-              className="flex items-center gap-2 px-5 py-2 bg-slate-200 text-slate-700 font-medium rounded-xl hover:bg-slate-300 transition-colors"
-            >
-              <Camera className="w-4 h-4" />
-              <span className="text-sm">Take Photo</span>
-            </motion.button>
+              </motion.button>
+            </motion.div>
           )}
 
-          <div className="flex items-center gap-3 w-full sm:w-auto">
+          <div className="flex items-center gap-3">
+            {!capturedImage && (
+              <motion.button
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                onClick={() => setShowCamera(true)}
+                className="flex items-center gap-2 px-5 py-3 bg-slate-100 text-slate-700 font-semibold rounded-xl hover:bg-slate-200 transition-colors"
+              >
+                <Camera className="w-5 h-5" />
+                <span>Take Photo</span>
+              </motion.button>
+            )}
+
             <motion.button
-              type="button"
-              whileTap={{ scale: 0.95 }}
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
               onClick={onClose}
-              className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-6 py-2.5 bg-slate-200 text-slate-700 font-semibold rounded-xl hover:bg-slate-300 transition-colors text-sm"
+              className="flex-1 px-6 py-3 bg-slate-100 text-slate-700 font-semibold rounded-xl hover:bg-slate-200 transition-colors"
             >
-              <XCircle className="w-5 h-5" />
-              <span>Cancel</span>
+              Cancel
             </motion.button>
 
             <motion.button
-              type="button"
-              whileTap={{ scale: 0.95 }}
+              whileHover={{ scale: title.trim() ? 1.02 : 1 }}
+              whileTap={{ scale: title.trim() ? 0.98 : 1 }}
               onClick={handleSubmit}
-              className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-6 py-2.5 bg-primary-600 text-white font-semibold rounded-xl hover:bg-primary-700 shadow-lg shadow-primary-500/30 transition-all text-sm"
+              disabled={!title.trim()}
+              className={`flex-1 px-6 py-3 font-bold rounded-xl transition-all shadow-lg
+                ${title.trim()
+                  ? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white hover:shadow-xl hover:shadow-indigo-500/30'
+                  : 'bg-slate-200 text-slate-400 cursor-not-allowed'
+                }
+              `}
             >
-              <Plus className="w-5 h-5" />
-              <span>Add Note</span>
+              Add Note
             </motion.button>
           </div>
         </div>
       )}
-    </div>
+    </motion.div>
   );
 }
 
-// --- CAMERA VIEW (Unchanged) ---
 interface CameraViewProps {
   onCapture: (imageData: string) => void;
   onClose: () => void;
@@ -414,13 +397,13 @@ function CameraView({ onCapture, onClose }: CameraViewProps) {
         }
       } catch (error) {
         console.error('Camera access denied:', error);
-        alert('Camera access denied. Please enable camera permissions.');
+        alert('Camera access denied');
         onClose();
       }
     };
     startCamera();
     return () => {
-      if (currentVideoElement && currentVideoElement.srcObject) {
+      if (currentVideoElement?.srcObject) {
         (currentVideoElement.srcObject as MediaStream).getTracks().forEach(track => track.stop());
       }
     };
@@ -440,7 +423,11 @@ function CameraView({ onCapture, onClose }: CameraViewProps) {
   };
 
   return (
-    <div className="space-y-4">
+    <motion.div 
+      initial={{ opacity: 0, scale: 0.95 }}
+      animate={{ opacity: 1, scale: 1 }}
+      className="space-y-4"
+    >
       <video
         ref={videoRef}
         autoPlay
@@ -449,29 +436,27 @@ function CameraView({ onCapture, onClose }: CameraViewProps) {
       />
       <div className="flex gap-3">
         <motion.button
-          type="button"
-          whileTap={{ scale: 0.95 }}
+          whileHover={{ scale: 1.02 }}
+          whileTap={{ scale: 0.98 }}
           onClick={capturePhoto}
-          className="flex-1 px-5 py-2.5 bg-primary-600 text-white font-semibold rounded-xl hover:bg-primary-700 shadow-lg shadow-primary-500/30 transition-all"
+          className="flex-1 px-6 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-bold rounded-xl shadow-lg shadow-indigo-500/30 hover:shadow-xl transition-all"
         >
           Capture
         </motion.button>
         <motion.button
-          type="button"
-          whileTap={{ scale: 0.95 }}
+          whileHover={{ scale: 1.02 }}
+          whileTap={{ scale: 0.98 }}
           onClick={onClose}
-          className="px-5 py-2.5 bg-slate-200 text-slate-700 font-semibold rounded-xl hover:bg-slate-300 transition-colors"
+          className="px-6 py-3 bg-slate-200 text-slate-700 font-semibold rounded-xl hover:bg-slate-300 transition-colors"
         >
           Cancel
         </motion.button>
       </div>
-      <canvas ref={canvasRef} style={{ display: 'none' }} />
-    </div>
+      <canvas ref={canvasRef} className="hidden" />
+    </motion.div>
   );
 }
 
-
-// --- ITEM LIST (Unchanged) ---
 interface ItemListProps {
   items: Item[] | undefined;
   onDelete: (id: string) => void;
@@ -480,11 +465,14 @@ interface ItemListProps {
 function ItemList({ items, onDelete }: ItemListProps) {
   if (!items) {
     return (
-      <div className="text-center py-16 bg-white rounded-3xl shadow-md border border-slate-200">
-        <div className="animate-pulse">
-          <div className="w-16 h-16 bg-slate-200 rounded-full mx-auto mb-4"></div>
+      <div className="text-center py-20 bg-white rounded-3xl shadow-sm border border-slate-200">
+        <motion.div
+          animate={{ scale: [1, 1.1, 1] }}
+          transition={{ duration: 1.5, repeat: Infinity }}
+        >
+          <div className="w-16 h-16 bg-indigo-100 rounded-full mx-auto mb-4"></div>
           <p className="text-slate-500 font-medium">Loading your notes...</p>
-        </div>
+        </motion.div>
       </div>
     );
   }
@@ -493,18 +481,19 @@ function ItemList({ items, onDelete }: ItemListProps) {
     return (
       <motion.div 
         initial={{ opacity: 0, scale: 0.9 }}
-        animate={{ opacity: 1, scale: 1, transition: { ...fastTransition, delay: 0.2 } }}
-        className="text-center py-20 bg-white rounded-3xl shadow-md border border-slate-200"
+        animate={{ opacity: 1, scale: 1 }}
+        transition={{ delay: 0.2 }}
+        className="text-center py-24 bg-white rounded-3xl shadow-sm border border-slate-200"
       >
         <motion.div
-          animate={{ y: [0, -10, 0] }}
-          transition={{ duration: 1.5, repeat: Infinity, ease: 'easeInOut' }}
-          className="w-20 h-20 bg-primary-100 rounded-full flex items-center justify-center mx-auto mb-4"
+          animate={{ y: [0, -15, 0] }}
+          transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
+          className="w-24 h-24 bg-gradient-to-br from-indigo-100 to-purple-100 rounded-3xl flex items-center justify-center mx-auto mb-6 shadow-lg"
         >
-          <Inbox className="w-10 h-10 text-primary-400" />
+          <Inbox className="w-12 h-12 text-indigo-400" />
         </motion.div>
-        <h3 className="text-xl font-bold text-slate-800 mb-2">No notes yet</h3>
-        <p className="text-sm text-slate-500">Start capturing your thoughts! ✨</p>
+        <h3 className="text-2xl font-bold text-slate-800 mb-2">No notes yet</h3>
+        <p className="text-slate-500">Start capturing your thoughts! ✨</p>
       </motion.div>
     );
   }
@@ -520,43 +509,46 @@ function ItemList({ items, onDelete }: ItemListProps) {
   );
 }
 
-// --- ITEM CARD (Unchanged) ---
 function ItemCard({ item, onDelete, index }: { item: Item; onDelete: (id: string) => void; index: number }) {
   const [isDeleting, setIsDeleting] = useState(false);
   
   return (
     <motion.article
       layout
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0, transition: { duration: 0.3, delay: index * 0.05, ease: fastEase } }}
-      exit={{ opacity: 0, x: -50, transition: { duration: 0.2, ease: fastEase } }}
-      className="bg-white rounded-2xl shadow-md overflow-hidden border border-slate-200"
+      initial={{ opacity: 0, y: 30, scale: 0.95 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      exit={{ opacity: 0, x: -100, scale: 0.95 }}
+      transition={{ delay: index * 0.05, type: "spring", stiffness: 200, damping: 25 }}
+      whileHover={{ y: -4, boxShadow: "0 20px 40px rgba(0,0,0,0.1)" }}
+      className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden hover:border-indigo-200 transition-all"
     >
       <AnimatePresence mode="wait">
         {isDeleting ? (
           <motion.div
             key="confirm"
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: 'auto', transition: fastTransition }}
-            exit={{ opacity: 0, height: 0, transition: { duration: 0.2 } }}
-            className="p-5 flex flex-col items-center justify-center text-center"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="p-6 flex flex-col items-center justify-center text-center bg-gradient-to-br from-red-50 to-rose-50"
           >
-            <h4 className="text-base font-semibold text-danger-600 mb-2">
+            <h4 className="text-lg font-bold text-rose-700 mb-2">
               Delete this note?
             </h4>
-            <p className="text-sm text-slate-600 mb-4">This action cannot be undone.</p>
+            <p className="text-sm text-slate-600 mb-4">This can't be undone</p>
             <div className="flex gap-3">
               <motion.button
+                whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
                 onClick={() => setIsDeleting(false)}
-                className="px-6 py-2 bg-slate-200 text-slate-700 font-semibold rounded-xl hover:bg-slate-300 transition-colors text-sm"
+                className="px-5 py-2 bg-white text-slate-700 font-semibold rounded-xl hover:bg-slate-100 transition-colors border border-slate-200"
               >
                 Cancel
               </motion.button>
               <motion.button
+                whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
                 onClick={() => onDelete(item.id!)}
-                className="flex items-center gap-2 px-6 py-2 bg-danger-600 text-white font-semibold rounded-xl hover:bg-danger-700 shadow-lg shadow-danger-500/30 transition-all text-sm"
+                className="flex items-center gap-2 px-5 py-2 bg-gradient-to-r from-rose-600 to-red-600 text-white font-bold rounded-xl shadow-lg shadow-rose-500/30 hover:shadow-xl transition-all"
               >
                 <Trash2 className="w-4 h-4" />
                 Delete
@@ -564,60 +556,66 @@ function ItemCard({ item, onDelete, index }: { item: Item; onDelete: (id: string
             </div>
           </motion.div>
         ) : (
-          <motion.div
-            key="content"
-            initial={false}
-            exit={{ opacity: 0, height: 0, transition: { duration: 0.2 } }}
-            className="relative"
-          >
+          <motion.div key="content" className="relative">
             <motion.button
+              whileHover={{ scale: 1.1, rotate: 90 }}
               whileTap={{ scale: 0.9 }}
               onClick={() => setIsDeleting(true)}
-              className="absolute top-4 right-4 p-2 text-slate-400 rounded-xl hover:bg-danger-50 hover:text-danger-500 transition-all z-10"
+              className="absolute top-4 right-4 p-2.5 text-slate-400 rounded-xl hover:bg-rose-50 hover:text-rose-500 transition-all z-10"
             >
               <Trash2 className="w-5 h-5" />
             </motion.button>
 
-            <div className="p-5">
-              <div className="flex items-start justify-between">
-                <div className="flex-1 pr-10">
-                  <h3 className="text-lg font-bold text-slate-900 mb-1">
-                    {item.title}
-                  </h3>
-                  <p className="text-sm text-slate-600 leading-relaxed whitespace-pre-wrap">
-                    {item.description}
-                  </p>
-                </div>
+            <div className="p-6">
+              <div className="flex items-start justify-between mb-3">
+                <h3 className="text-xl font-bold text-slate-900 pr-10 leading-tight">
+                  {item.title}
+                </h3>
               </div>
+              <p className="text-slate-600 leading-relaxed whitespace-pre-wrap">
+                {item.description}
+              </p>
 
-              <div className="flex items-center justify-between mt-4 pt-4 border-t border-slate-100">
+              <div className="flex items-center justify-between mt-5 pt-4 border-t border-slate-100">
                 <span className="text-xs text-slate-400 font-medium">
                   {new Date(item.createdAt).toLocaleDateString('en-US', {
                     month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' 
                   })}
                 </span>
                 {!item.synced ? (
-                  <span className="flex items-center gap-1.5 text-xs font-semibold bg-warning-100 text-warning-700 px-3 py-1.5 rounded-full">
-                    <div className="w-1.5 h-1.5 bg-warning-500 rounded-full animate-pulse"></div>
-                    Pending sync
-                  </span>
+                  <motion.span 
+                    animate={{ opacity: [1, 0.5, 1] }}
+                    transition={{ duration: 1.5, repeat: Infinity }}
+                    className="flex items-center gap-2 text-xs font-bold bg-gradient-to-r from-amber-100 to-orange-100 text-amber-700 px-3 py-1.5 rounded-full border border-amber-200"
+                  >
+                    <div className="w-2 h-2 bg-amber-500 rounded-full" />
+                    Pending
+                  </motion.span>
                 ) : (
-                  <div className="flex items-center gap-1.5 text-xs font-semibold text-success-600 bg-success-50 px-3 py-1.5 rounded-full">
+                  <motion.div 
+                    initial={{ scale: 0 }}
+                    animate={{ scale: 1 }}
+                    className="flex items-center gap-1.5 text-xs font-bold text-emerald-600 bg-gradient-to-r from-emerald-50 to-green-50 px-3 py-1.5 rounded-full border border-emerald-200"
+                  >
                     <CheckCircle className="w-3.5 h-3.5" />
-                    <span>Synced</span>
-                  </div>
+                    Synced
+                  </motion.div>
                 )}
               </div>
             </div>
 
             {item.imageUrl && (
-              <div className="border-t border-slate-200 overflow-hidden">
+              <motion.div 
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                className="border-t border-slate-200"
+              >
                 <img
                   src={item.imageUrl}
                   alt={item.title}
-                  className="w-full h-auto object-cover"
+                  className="w-full h-auto"
                 />
-              </div>
+              </motion.div>
             )}
           </motion.div>
         )}
