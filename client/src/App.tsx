@@ -1,27 +1,13 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Camera, Plus, Trash2, Download, CheckCircle, Inbox, Image, X, Sparkles, WifiOff, RefreshCw, Zap } from 'lucide-react';
+import { useLiveQuery } from 'dexie-react-hooks';
+import { db, addItem, deleteItem } from './db/dexie';
+import { useSyncManager } from './hooks/useSyncManager';
+import {
+  RefreshCw, Camera, Plus, Trash2, Download,
+  CheckCircle, Inbox, Image, X, Sparkles,
+  WifiOff, Zap
+} from 'lucide-react';
 import { motion, AnimatePresence, PanInfo } from 'framer-motion';
-
-// Mock data and hooks for the artifact
-const useMockLiveQuery = () => {
-  const [items, setItems] = useState([
-    {
-      id: '1',
-      title: 'Welcome to PWA Notes',
-      description: 'This is your first note. Try adding more!',
-      createdAt: new Date(Date.now() - 86400000),
-      synced: true
-    }
-  ]);
-  return items;
-};
-
-const useMockSyncManager = () => ({
-  isSyncing: false,
-  syncStatus: 'idle',
-  performSync: () => console.log('Sync performed'),
-  isOnline: true
-});
 
 interface Item {
   id?: string;
@@ -34,28 +20,72 @@ interface Item {
 }
 
 function App() {
-  const { isSyncing, syncStatus, performSync, isOnline } = useMockSyncManager();
-  const items = useMockLiveQuery() as Item[];
+  const { isSyncing, syncStatus, performSync, isOnline } = useSyncManager();
+
+  const items = useLiveQuery(() =>
+    db.items
+      .orderBy('createdAt')
+      .reverse()
+      .toArray()
+      .then(allItems => allItems.filter(item => !item.deleted))
+  ) as Item[] | undefined;
 
   const [showInstallPrompt, setShowInstallPrompt] = useState(false);
+  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [mounted, setMounted] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
 
   useEffect(() => {
     setTimeout(() => setMounted(true), 50);
+    const handler = (e: Event) => {
+      e.preventDefault();
+      setDeferredPrompt(e);
+      setShowInstallPrompt(true);
+    };
+    window.addEventListener('beforeinstallprompt', handler);
+    return () => window.removeEventListener('beforeinstallprompt', handler);
   }, []);
 
+  const handleInstallClick = async () => {
+    if (!deferredPrompt) return;
+    deferredPrompt.prompt();
+    setDeferredPrompt(null);
+    setShowInstallPrompt(false);
+  };
+
   const handleAddItem = async (newItem: Omit<Item, 'createdAt' | 'synced' | 'id'>) => {
-    console.log('Adding item:', newItem);
-    setIsModalOpen(false);
+    try {
+      await addItem({
+        title: newItem.title,
+        description: newItem.description,
+        imageUrl: newItem.imageUrl,
+      });
+      setIsModalOpen(false);
+      if (isOnline) {
+        setTimeout(() => performSync(), 100);
+      }
+    } catch (error) {
+      console.error('Failed to add item:', error);
+      alert('Failed to add item');
+    }
   };
 
   const handleDeleteItem = async (id: string) => {
-    console.log('Deleting item:', id);
+    try {
+      await deleteItem(id);
+      if (isOnline) {
+        setTimeout(() => performSync(), 100);
+      }
+    } catch (error) {
+      console.error('Failed to delete item:', error);
+    }
   };
 
-  const handleDragEnd = (event: any, info: PanInfo) => {
-    if (info.offset.y > 200 || info.velocity.y > 500) {
+  const handleDragEnd = (_event: any, info: PanInfo) => {
+    const dragThreshold = 200;
+    const velocityThreshold = 500; 
+
+    if (info.offset.y > dragThreshold || info.velocity.y > velocityThreshold) {
       setIsModalOpen(false);
     }
   };
@@ -73,7 +103,7 @@ function App() {
           syncStatus={syncStatus}
           onSync={performSync}
           showInstallPrompt={showInstallPrompt}
-          onInstall={() => console.log('Install')}
+          onInstall={handleInstallClick}
         />
         
         <main className="max-w-5xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
@@ -397,13 +427,13 @@ function CameraView({ onCapture, onClose }: CameraViewProps) {
         }
       } catch (error) {
         console.error('Camera access denied:', error);
-        alert('Camera access denied');
+        alert('Camera access denied. Please enable camera permissions.');
         onClose();
       }
     };
     startCamera();
     return () => {
-      if (currentVideoElement?.srcObject) {
+      if (currentVideoElement && currentVideoElement.srcObject) {
         (currentVideoElement.srcObject as MediaStream).getTracks().forEach(track => track.stop());
       }
     };
