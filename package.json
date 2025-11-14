@@ -1,0 +1,19 @@
+{
+  "name": "pwa-poc",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "install-all": "cd client && npm install && cd ../server && npm install",
+    "dev:client": "cd client && npm start",
+    "dev:server": "cd server && npm run dev",
+    "build": "cd client && npm run build"
+  },
+  "dependencies": {
+    "@vercel/node": "^3.2.0",
+    "mongoose": "^8.8.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "typescript": "^5.3.0"
+  }
+}
