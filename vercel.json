@@ -2,6 +2,10 @@
   "version": 2,
   "builds": [
     {
+      "src": "api/**/*.ts",
+      "use": "@vercel/node"
+    },
+    {
       "src": "client/package.json",
       "use": "@vercel/static-build",
       "config": {
@@ -11,8 +15,16 @@
   ],
   "routes": [
     {
-      "src": "/api/(.*)",
-      "dest": "/api/$1"
+      "src": "/api/health",
+      "dest": "/api/health"
+    },
+    {
+      "src": "/api/items/(.*)",
+      "dest": "/api/items?path=$1"
+    },
+    {
+      "src": "/api/items",
+      "dest": "/api/items"
     },
     {
       "src": "/static/(.*)",
