@@ -1,8 +1,7 @@
-// client/src/services/api.ts
-
-// Use the .env variable if it exists, otherwise fall back to a relative path
-// This works for BOTH local development and Vercel deployment.
-const API_BASE_URL = process.env.REACT_APP_API_URL || '/api';
+// In production (Vercel), use relative paths. In development, use localhost
+const API_BASE_URL = process.env.NODE_ENV === 'production' 
+  ? '/api' 
+  : (process.env.REACT_APP_API_URL || 'http://localhost:5000/api');
 
 interface ApiResponse<T> {
   success: boolean;
@@ -17,8 +16,11 @@ class ApiService {
     endpoint: string,
     options: RequestInit = {}
   ): Promise<ApiResponse<T>> {
+    const url = `${API_BASE_URL}${endpoint}`;
+    console.log('Making request to:', url); // Debug log
+    
     try {
-      const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+      const response = await fetch(url, {
         ...options,
         headers: {
           'Content-Type': 'application/json',
@@ -27,10 +29,13 @@ class ApiService {
       });
 
       if (!response.ok) {
+        const errorText = await response.text();
+        console.error('API Error:', response.status, errorText);
         throw new Error(`HTTP error! status: ${response.status}`);
       }
 
-      return await response.json();
+      const data = await response.json();
+      return data;
     } catch (error) {
       console.error('API request failed:', error);
       throw error;

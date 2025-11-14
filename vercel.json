@@ -2,7 +2,7 @@
   "version": 2,
   "builds": [
     {
-      "src": "server/package.json",
+      "src": "server/api/index.ts",
       "use": "@vercel/node"
     },
     {
@@ -16,11 +16,27 @@
   "routes": [
     {
       "src": "/api/(.*)",
-      "dest": "server/dist/server.js"
+      "dest": "/server/api/index.ts"
+    },
+    {
+      "src": "/sw.js",
+      "dest": "/client/build/sw.js"
+    },
+    {
+      "src": "/manifest.json",
+      "dest": "/client/build/manifest.json"
+    },
+    {
+      "src": "/static/(.*)",
+      "dest": "/client/build/static/$1"
+    },
+    {
+      "src": "/(.*\\.(png|jpg|jpeg|gif|svg|ico|json))",
+      "dest": "/client/build/$1"
     },
     {
       "src": "/(.*)",
-      "dest": "client/build/$1"
+      "dest": "/client/build/index.html"
     }
   ]
 }
