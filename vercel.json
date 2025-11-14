@@ -2,13 +2,6 @@
   "version": 2,
   "builds": [
     {
-      "src": "api/**/*.ts",
-      "use": "@vercel/node",
-      "config": {
-        "includeFiles": ["api/**"]
-      }
-    },
-    {
       "src": "client/package.json",
       "use": "@vercel/static-build",
       "config": {
@@ -18,35 +11,27 @@
   ],
   "routes": [
     {
-      "src": "/api/health",
-      "dest": "/api/health.ts"
-    },
-    {
-      "src": "/api/items/sync",
-      "dest": "/api/items.ts?path=sync"
-    },
-    {
-      "src": "/api/items/(.*)",
-      "dest": "/api/items.ts?path=$1"
-    },
-    {
-      "src": "/api/items",
-      "dest": "/api/items.ts"
-    },
-    {
-      "src": "/sw.js",
-      "dest": "/client/build/sw.js"
-    },
-    {
-      "src": "/manifest.json",
-      "dest": "/client/build/manifest.json"
+      "src": "/api/(.*)",
+      "dest": "/api/$1"
     },
     {
       "src": "/static/(.*)",
       "dest": "/client/build/static/$1"
     },
     {
-      "src": "/(.*\\.(png|jpg|jpeg|gif|svg|ico|json|txt))",
+      "src": "/manifest.json",
+      "dest": "/client/build/manifest.json"
+    },
+    {
+      "src": "/sw.js",
+      "dest": "/client/build/sw.js"
+    },
+    {
+      "src": "/favicon.ico",
+      "dest": "/client/build/favicon.ico"
+    },
+    {
+      "src": "/(.*\\.(png|jpg|ico|json))",
       "dest": "/client/build/$1"
     },
     {
